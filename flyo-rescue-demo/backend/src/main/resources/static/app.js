@@ -1459,7 +1459,7 @@ async function sendWhatsAppOperatorCommand(command, buttonId = null) {
         await fetchOtpStatus();
     } catch (e) {
         console.error("Error executing WhatsApp command:", e);
-        alert("WhatsApp Command Error: " + e.message);
+        await fetchWhatsAppOperatorChat();
     } finally {
         if (sendBtn) sendBtn.disabled = false;
         if (input) input.focus();

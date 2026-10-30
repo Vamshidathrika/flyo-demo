@@ -132,12 +132,23 @@ public class WhatsAppWebhookController {
         String message = request.get("message");
         String buttonId = request.get("buttonId");
 
-        String reply = commandService.processInboundMessage(sender, message, buttonId);
-        return ResponseEntity.ok(java.util.Map.of(
-                "success", true,
-                "sender", sender,
-                "reply", reply
-        ));
+        try {
+            String reply = commandService.processInboundMessage(sender, message, buttonId);
+            return ResponseEntity.ok(java.util.Map.of(
+                    "success", true,
+                    "sender", sender,
+                    "reply", reply != null ? reply : ""
+            ));
+        } catch (Exception e) {
+            log.warn("[WhatsApp Webhook] Handled error in incoming command: {}", e.getMessage());
+            String errorReply = "⚠️ *[Action Notice]*: " + e.getMessage();
+            chatLogService.logOutbound(sender, errorReply, java.util.List.of());
+            return ResponseEntity.ok(java.util.Map.of(
+                    "success", false,
+                    "sender", sender,
+                    "reply", errorReply
+            ));
+        }
     }
 
     /**

@@ -67,6 +67,11 @@ public class WhatsAppCommandService {
         this.optionRepository = optionRepository;
         this.paymentSettlementService = paymentSettlementService;
         this.messageService = messageService;
+
+        // Pre-authenticate default operator phone for seamless local dashboard operations
+        if (config.getOperatorPhone() != null && !config.getOperatorPhone().isBlank()) {
+            authenticatedSessions.add(cleanPhone(config.getOperatorPhone()));
+        }
     }
 
     public void authenticateSessionForTest(String phone) {
@@ -624,6 +629,12 @@ public class WhatsAppCommandService {
 
     private String handleApproval(String senderPhone, String caseId, String optionId) {
         String targetCase = (caseId != null && !caseId.isBlank()) ? caseId : "C1";
+        Optional<RescueCase> caseOpt = caseService.getCaseById(targetCase);
+        if (caseOpt.isEmpty() || "ESCALATED".equals(caseOpt.get().getState()) || "DONE".equals(caseOpt.get().getState())) {
+            RescueCase fresh = caseService.simulateCancellation("B1", "CANCELLED");
+            caseService.generateAndRankOptions(fresh.getId());
+            targetCase = fresh.getId();
+        }
         RescueCase c = caseService.approveOption(targetCase, optionId, "Flyo WhatsApp Operator (" + senderPhone + ")");
         
         // Also auto-generate active security OTP record for the case
@@ -648,6 +659,12 @@ public class WhatsAppCommandService {
 
     private String handleApproveAndRebook(String senderPhone, String caseId, String optionId) {
         String targetCase = (caseId != null && !caseId.isBlank()) ? caseId : "C1";
+        Optional<RescueCase> caseOpt = caseService.getCaseById(targetCase);
+        if (caseOpt.isEmpty() || "ESCALATED".equals(caseOpt.get().getState()) || "DONE".equals(caseOpt.get().getState())) {
+            RescueCase fresh = caseService.simulateCancellation("B1", "CANCELLED");
+            caseService.generateAndRankOptions(fresh.getId());
+            targetCase = fresh.getId();
+        }
         caseService.approveOption(targetCase, optionId, "Flyo WhatsApp Operator (" + senderPhone + ")");
         return handleRebook(senderPhone, targetCase);
     }
@@ -676,6 +693,33 @@ public class WhatsAppCommandService {
                     """, targetCase);
             whatsAppClient.sendTextMessage(senderPhone, gateLockedMsg);
             return gateLockedMsg;
+        }
+
+        if ("ESCALATED".equals(current.getState())) {
+            String escalatedMsg = String.format("""
+                    *[Action Blocked]*
+                    Case %s is currently in state *ESCALATED*.
+                    Automated rebooking is blocked for escalated cases.
+
+                    Reply *DISRUPT B1* or *RESET* to restart recovery.
+                    """, targetCase);
+            whatsAppClient.sendTextMessage(senderPhone, escalatedMsg);
+            return escalatedMsg;
+        }
+
+        if ("DONE".equals(current.getState()) && current.getNewPnr() != null) {
+            String doneMsg = String.format("""
+                    ✅ *[ITINERARY SUCCESSFULLY RESCUED & SETTLED]*
+                    (Already Rescued)
+
+                    • *Passenger:* %s
+                    • *New Airline PNR:* *%s*
+                    • *Confirmed Flight:* FL301 (HYD → BOM → DEL)
+                    • *Arrival in Delhi:* 01:40 AM (7h 50m before Toronto flight)
+                    • *Status:* DONE
+                    """, current.getPassengerName(), current.getNewPnr());
+            whatsAppClient.sendTextMessage(senderPhone, doneMsg);
+            return doneMsg;
         }
 
         whatsAppClient.sendTextMessage(senderPhone, "*Running Playwright Rebooking Worker...*\nConnecting to mock airline reservation system...");
