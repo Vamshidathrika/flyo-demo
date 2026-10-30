@@ -1,8 +1,11 @@
 package com.flyo.rescue.config;
 
 import com.flyo.rescue.model.Booking;
+import com.flyo.rescue.model.OperatorAccount;
 import com.flyo.rescue.repository.BookingRepository;
+import com.flyo.rescue.repository.OperatorAccountRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -11,9 +14,15 @@ import java.util.List;
 public class FlyoDataSeeder implements CommandLineRunner {
 
     private final BookingRepository bookingRepository;
+    private final OperatorAccountRepository operatorAccountRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public FlyoDataSeeder(BookingRepository bookingRepository) {
+    public FlyoDataSeeder(BookingRepository bookingRepository,
+                          OperatorAccountRepository operatorAccountRepository,
+                          PasswordEncoder passwordEncoder) {
         this.bookingRepository = bookingRepository;
+        this.operatorAccountRepository = operatorAccountRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -82,7 +91,17 @@ public class FlyoDataSeeder implements CommandLineRunner {
                     )
             );
             bookingRepository.saveAll(seedBookings);
-            System.out.println("Flyo Rescue: 5 Seed Bookings initialized successfully in H2 database.");
+            System.out.println("Flyo Rescue: 5 Seed Bookings initialized successfully.");
+        }
+
+        if (operatorAccountRepository.count() == 0) {
+            List<OperatorAccount> initialAccounts = List.of(
+                    new OperatorAccount("USR-1", "operator", passwordEncoder.encode("Operator123!"), "Flyo Operator", "ROLE_OPERATOR", true, "919876543210"),
+                    new OperatorAccount("USR-2", "admin", passwordEncoder.encode("AdminSecret123!"), "System Admin", "ROLE_ADMIN", true, "919999999999"),
+                    new OperatorAccount("USR-3", "auditor", passwordEncoder.encode("AuditorView123!"), "Compliance Auditor", "ROLE_AUDITOR", true, "918888888888")
+            );
+            operatorAccountRepository.saveAll(initialAccounts);
+            System.out.println("Flyo Security: Initial RBAC Operator Accounts seeded.");
         }
     }
 }

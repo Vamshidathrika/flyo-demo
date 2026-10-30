@@ -38,6 +38,11 @@ public class RescueCase {
     private String manualNextStep;
     
     private LocalDateTime createdAt;
+    
+    @jakarta.persistence.Version
+    private Long version;
+    
+    private LocalDateTime updatedAt;
 
     public RescueCase() {
     }
@@ -183,5 +188,21 @@ public class RescueCase {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }
