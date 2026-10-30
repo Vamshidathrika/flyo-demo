@@ -61,8 +61,9 @@ function parseArgs(): RebookArgs {
     return { caseId, optionId, flight, passenger, baseUrl, broken, vccCard, vccExp, vccCvv, vccAmount };
 }
 
+const config = parseArgs();
+
 async function runWorker() {
-    const config = parseArgs();
     const screenshotsDir = path.join(__dirname, "screenshots");
     if (!fs.existsSync(screenshotsDir)) {
         fs.mkdirSync(screenshotsDir, { recursive: true });
@@ -220,4 +221,17 @@ async function runWorker() {
     }
 }
 
-runWorker();
+runWorker().catch(err => {
+    const errorResult: RebookResult = {
+        success: false,
+        caseId: config.caseId,
+        optionId: config.optionId,
+        flight: config.flight,
+        error: `Fatal worker initialization error: ${err instanceof Error ? err.message : String(err)}`,
+        retryCount: 0,
+        steps: [`Worker fatal exception: ${err instanceof Error ? err.message : String(err)}`],
+        screenshots: []
+    };
+    console.log(JSON.stringify(errorResult, null, 2));
+    process.exit(1);
+});
