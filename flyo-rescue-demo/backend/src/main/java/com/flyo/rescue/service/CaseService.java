@@ -28,6 +28,7 @@ public class CaseService {
     private final AuditService auditService;
     private final MessageService messageService;
     private final PaymentSettlementService paymentSettlementService;
+    private final CaseStateMachineService stateMachineService;
 
     public CaseService(RescueCaseRepository caseRepository,
                        BookingRepository bookingRepository,
@@ -37,7 +38,8 @@ public class CaseService {
                        RebookService rebookService,
                        AuditService auditService,
                        MessageService messageService,
-                       PaymentSettlementService paymentSettlementService) {
+                       PaymentSettlementService paymentSettlementService,
+                       CaseStateMachineService stateMachineService) {
         this.caseRepository = caseRepository;
         this.bookingRepository = bookingRepository;
         this.optionRepository = optionRepository;
@@ -47,6 +49,7 @@ public class CaseService {
         this.auditService = auditService;
         this.messageService = messageService;
         this.paymentSettlementService = paymentSettlementService;
+        this.stateMachineService = stateMachineService;
     }
 
     public List<RescueCase> getAllCases() {
@@ -183,7 +186,7 @@ public class CaseService {
         List<RebookOption> savedOptions = optionRepository.saveAll(rankedOptions);
 
         // Transition state from DETECTED to OPTIONS_READY
-        rescueCase.setState("OPTIONS_READY");
+        stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_OPTIONS_READY, "Flyo Ranking Engine", "Options generated and ranked");
         caseRepository.save(rescueCase);
 
         RebookOption bestOption = savedOptions.isEmpty() ? null : savedOptions.get(0);
@@ -215,7 +218,7 @@ public class CaseService {
         } else {
             caseRepository.findById(caseId).ifPresent(c -> {
                 if ("DETECTED".equals(c.getState())) {
-                    c.setState("OPTIONS_READY");
+                    stateMachineService.transition(c, CaseStateMachineService.STATE_OPTIONS_READY, "Flyo System", "Options retrieved");
                     caseRepository.save(c);
                 }
             });
@@ -257,7 +260,8 @@ public class CaseService {
         rescueCase.setApprovedOptionId(option.getId());
         rescueCase.setApprovedBy(approvedBy != null && !approvedBy.isBlank() ? approvedBy : "Flyo Operator");
         rescueCase.setApprovedAt(LocalDateTime.now());
-        rescueCase.setState("AWAITING_APPROVAL"); // Confirmed approval, ready for rebook execution
+        stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_AWAITING_APPROVAL, rescueCase.getApprovedBy(),
+                String.format("Option %s (%s) approved for rebooking.", option.getId(), option.getFlight()));
         rescueCase.setError(null);
         rescueCase.setManualNextStep(null);
 
@@ -289,13 +293,13 @@ public class CaseService {
         RescueCase rescueCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
-        rescueCase.setState("ESCALATED");
+        String reasonText = (reason != null && !reason.isBlank()) ? reason : "Rejected by Flyo Operator";
+        stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_ESCALATED, rejectedBy != null ? rejectedBy : "Flyo Operator", reasonText);
         rescueCase.setApprovedOptionId(null);
         rescueCase.setApprovedBy(null);
         rescueCase.setApprovedAt(null);
         rescueCase.setNewPnr(null);
         rescueCase.setManualNextStep(null);
-        String reasonText = (reason != null && !reason.isBlank()) ? reason : "Rejected by Flyo Operator";
         rescueCase.setError("ESCALATED: " + reasonText + " (Escalated by " + (rejectedBy != null ? rejectedBy : "Flyo Operator") + ")");
 
         RescueCase saved = caseRepository.save(rescueCase);
@@ -336,7 +340,7 @@ public class CaseService {
                             .orElseThrow(() -> new IllegalArgumentException("Approved option not found: " + rescueCase.getApprovedOptionId()));
                 });
 
-        rescueCase.setState("REBOOKING");
+        stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_REBOOKING, "Flyo Rebook Engine", "Subprocess dispatched to Playwright browser worker");
         caseRepository.save(rescueCase);
 
         // Audit Trail: Rebooking Initiated
@@ -381,8 +385,9 @@ public class CaseService {
 
         if (result != null && result.isSuccess() && result.getNewPnr() != null) {
             rescueCase.setNewPnr(result.getNewPnr());
-            rescueCase.setState("DONE");
             rescueCase.setError(null);
+            stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_DONE, "Playwright Worker",
+                    String.format("Mock airline rebooking successful. New airline PNR %s extracted.", result.getNewPnr()));
 
             // Update underlying monitored booking status to Rescued
             bookingRepository.findById(rescueCase.getBookingId()).ifPresent(b -> {
@@ -442,9 +447,10 @@ public class CaseService {
                     String.format("Simulated WhatsApp notification generated and dispatched with new PNR %s.", result.getNewPnr())
             );
         } else {
-            rescueCase.setState("FAILED_ESCALATED");
+            String errDetail = result.getError() != null ? result.getError() : "Rebooking execution failed on mock airline portal";
             rescueCase.setNewPnr(null);
-            rescueCase.setError(result.getError() != null ? result.getError() : "Rebooking execution failed on mock airline portal");
+            rescueCase.setError(errDetail);
+            stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_FAILED_ESCALATED, "Playwright Worker", errDetail);
             rescueCase.setManualNextStep("Manual Action Required: Call airline operations directly at 1800-209-4555. Passenger "
                     + rescueCase.getPassengerName() + " has onward flight " + rescueCase.getMissedConnection()
                     + ". Quote cancelled PNR " + rescueCase.getBookingId() + " / flight " + rescueCase.getFlight() + ".");

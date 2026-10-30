@@ -10,6 +10,15 @@ import java.util.List;
 public class RankingEngine {
 
     public static final int MINIMUM_SAFE_CONNECTION_MINUTES = 120;
+    private final MctRulesService mctRulesService;
+
+    public RankingEngine() {
+        this.mctRulesService = new MctRulesService();
+    }
+
+    public RankingEngine(MctRulesService mctRulesService) {
+        this.mctRulesService = mctRulesService != null ? mctRulesService : new MctRulesService();
+    }
 
     public List<RebookOption> rankOptions(List<RebookOption> options) {
         return rankOptions(options, "onward international connection to Toronto (YYZ 09:30)");
