@@ -1,0 +1,208 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-29T22:00:46.657+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] com.flyo.rescue.FlyoRescueApplication    : Starting FlyoRescueApplication v0.0.1-SNAPSHOT using Java 17.0.20 with PID 52528 (/Users/nani/Downloads/flyo/flyo-rescue-demo/backend/target/rescue-backend-0.0.1-SNAPSHOT.jar started by nani in /Users/nani/Downloads/flyo/flyo-rescue-demo/backend)
+2026-10-29T22:00:46.659+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] com.flyo.rescue.FlyoRescueApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-10-29T22:00:47.202+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-10-29T22:00:47.306+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 91 ms. Found 7 JPA repository interfaces.
+2026-10-29T22:00:47.737+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-10-29T22:00:47.749+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-29T22:00:47.749+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+2026-10-29T22:00:47.774+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-10-29T22:00:47.775+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1072 ms
+2026-10-29T22:00:47.802+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-10-29T22:00:47.974+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:flyodb user=SA
+2026-10-29T22:00:47.976+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-10-29T22:00:47.984+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.s.b.a.h2.H2ConsoleAutoConfiguration    : H2 console available at '/h2-console'. Database available at 'jdbc:h2:mem:flyodb'
+2026-10-29T22:00:48.087+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-10-29T22:00:48.142+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.3.Final
+2026-10-29T22:00:48.177+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-29T22:00:48.438+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-10-29T22:00:48.481+05:30  WARN 52528 --- [flyo-rescue-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-29T22:00:49.241+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-29T22:00:49.307+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-10-29T22:00:49.837+05:30  WARN 52528 --- [flyo-rescue-backend] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-10-29T22:00:49.867+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+2026-10-29T22:00:50.637+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-10-29T22:00:50.701+05:30  INFO 52528 --- [flyo-rescue-backend] [           main] com.flyo.rescue.FlyoRescueApplication    : Started FlyoRescueApplication in 4.313 seconds (process running for 4.82)
+Flyo Rescue: 5 Seed Bookings initialized successfully in H2 database.
+2026-10-29T22:00:59.961+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-29T22:00:59.961+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-29T22:00:59.962+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-10-29T22:01:32.653+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-7] c.f.r.service.WhatsAppCommandService     : [WhatsApp Bot Ingress] From: 919876543210, Body: HI, ButtonId: null
+2026-10-29T22:01:32.654+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-7] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound Interactive] To: 919876543210, Body: *Welcome to Flyo Rescue Platform*
+
+*Operator Authentication Required*
+To access passenger records, disruption management, and automated rebooking, please authenticate your session.
+
+• Registered Operator Phone: *+919876543210*
+
+Tap *Send Login OTP* below or reply *SEND OTP* to receive your 6-digit authorization code:
+, Buttons: [{id=REQUEST_LOGIN_OTP, title=Send Login OTP}, {id=HELP, title=System Help}]
+2026-10-29T22:01:32.654+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-7] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] Mock mode active: interactive message logged locally.
+2026-10-29T22:01:37.187+05:30  INFO 52528 --- [flyo-rescue-backend] [io-8080-exec-10] c.f.r.service.WhatsAppCommandService     : [WhatsApp Bot Ingress] From: 919876543210, Body: null, ButtonId: REQUEST_LOGIN_OTP
+2026-10-29T22:01:37.190+05:30  INFO 52528 --- [flyo-rescue-backend] [io-8080-exec-10] c.f.rescue.service.WhatsAppOtpService    : [WhatsApp Security OTP] Generated OTP 991378 for phone 919876543210 (Case: LOGIN, Option: AUTH, Expires in 5m)
+2026-10-29T22:01:37.190+05:30  INFO 52528 --- [flyo-rescue-backend] [io-8080-exec-10] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound Interactive] To: 919876543210, Body: *Flyo Security Verification Code*
+Your single-use 6-digit operator login code is:
+*991378*
+
+(Valid for 5 minutes)
+
+Reply with *991378* or tap below to authenticate and unlock your dashboard session:
+, Buttons: [{id=VERIFY_991378, title=Verify 991378}, {id=REQUEST_LOGIN_OTP, title=Resend Code}]
+2026-10-29T22:01:37.190+05:30  INFO 52528 --- [flyo-rescue-backend] [io-8080-exec-10] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] Mock mode active: interactive message logged locally.
+2026-10-29T22:01:44.074+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-6] c.f.r.service.WhatsAppCommandService     : [WhatsApp Bot Ingress] From: 919876543210, Body: null, ButtonId: VERIFY_991378
+2026-10-29T22:01:44.074+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-6] c.f.rescue.service.WhatsAppOtpService    : [WhatsApp Security OTP] OTP successfully verified for phone 919876543210 (Case: LOGIN, Option: AUTH)
+2026-10-29T22:01:44.075+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-6] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound Interactive] To: 919876543210, Body: *[Authentication Verified]*
+*Login Successful!*
+Welcome back, Flyo Operator (+919876543210).
+Your session is active and live disruption controls are unlocked.
+
+*Choose an operation below to interact with the Dashboard:*
+, Buttons: [{id=AUTORESCUE_B1, title=Auto-Rescue Hero}, {id=STATUS, title=Live Bookings}, {id=DISRUPT_B1, title=Cancel AI-839}]
+2026-10-29T22:01:44.075+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-6] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] Mock mode active: interactive message logged locally.
+2026-10-29T22:01:49.470+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-8] c.f.r.service.WhatsAppCommandService     : [WhatsApp Bot Ingress] From: 919876543210, Body: null, ButtonId: AUTORESCUE_B1
+2026-10-29T22:01:49.526+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-8] c.f.r.service.PaymentSettlementService   : [Payment Settlement] Issued VCC VCC-CE94D202 for Case C1 (Option O2), Amount: ₹4200
+2026-10-29T22:01:52.326+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-8] c.f.r.service.PaymentSettlementService   : [Payment Settlement] Settlement recorded TXN-08753F43 for Case C1, Amount: ₹4200
+2026-10-29T22:01:52.335+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-8] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound Interactive] To: 919876543210, Body: *[AUTONOMOUS RESCUE COMPLETE]*
+• Passenger: *Ananya Sharma*
+• Original Flight: *AI-839* (HYD → DEL) CANCELLED
+• Calculated Impact: Missed connection DEL → Toronto (YYZ)
+• Evaluated Recovery Options: O2 ranked #1 (470m buffer vs 120m threshold)
+• Operator Approval: Auto-signed by Flyo WhatsApp Bot
+• Browser Rebooking: Executed on airline portal (Playwright)
+• Confirmed Airline PNR: *R7X2K9*
+• Final State: *DONE*
+
+Passenger Ananya Sharma notified via WhatsApp.
+, Buttons: [{id=AUDIT, title=Audit Trail}, {id=STATUS, title=All Bookings}]
+2026-10-29T22:01:52.335+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-8] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] Mock mode active: interactive message logged locally.
+2026-10-29T22:01:59.289+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.r.service.WhatsAppCommandService     : [WhatsApp Bot Ingress] From: 919876543210, Body: null, ButtonId: AUDIT
+2026-10-29T22:01:59.293+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] To: 919876543210, Text: *Flyo Audit Trail for Case C1 (9 events)*:
+
+• *DISRUPTION_DETECTED* (Flyo Engine)
+   Flight AI-839 HYD → DEL cancelled. Disruption detected for passenger Ananya Sharma (PNR HYD123).
+
+• *PASSENGER_REASSURED* (Flyo Messaging Engine)
+   Stage 1 Reassurance notice dispatched to passenger Ananya Sharma via WhatsApp.
+
+• *OPTIONS_RANKED* (Flyo Ranking Engine)
+   Generated and ranked 3 rebooking options. Option O2 (HYD → BOM → DEL (via Mumbai)) ranked #1 (+₹4,200, preserves onward schedule).
+
+• *VCC_ISSUED* (Flyo Treasury Gateway)
+   Single-use Corporate Virtual Card VCC-CE94D202 issued for ₹4,200 (Card: •••• •••• •••• 9269, Exp: 12/28). Locked to Airline MCC.
+
+• *CASE_APPROVED* (Flyo WhatsApp Auto-Pilot)
+   Option O2 (FL301) approved for rebooking. Gate unlocked.
+
+• *REBOOK_INITIATED* (Flyo Rebook Engine)
+   Subprocess dispatched to Playwright browser worker for mock airline portal.
+
+• *PAYMENT_SETTLED* (RazorpayX / Flyo Settlement)
+   Fare difference of ₹4,200 successfully settled on VCC VCC-CE94D202 with StarSky Airlines. Transaction Ref: REF-F60A6C83-2.
+
+• *REBOOK_COMPLETED* (Playwright Worker)
+   Mock airline rebooking successful. New airline PNR R7X2K9 extracted from page DOM. 4 screenshots captured.
+
+• *MESSAGE_SENT* (Flyo Messaging Engine)
+   Simulated WhatsApp notification generated and dispatched with new PNR R7X2K9.
+
+System integrity: Append-only ledger.
+2026-10-29T22:01:59.293+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] Mock mode active: message logged without remote HTTP dispatch.
+2026-10-29T22:03:39.955+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-5] c.f.r.service.WhatsAppCommandService     : [WhatsApp Bot Ingress] From: 919876543210, Body: DISRUPT B1, ButtonId: null
+2026-10-29T22:03:40.084+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-5] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound Interactive] To: 919876543210, Body: 🚨 *[CRITICAL DISRUPTION DETECTED & RESCUE ALERT]*
+
+• *Passenger:* Ananya Sharma (PNR: B1)
+• *Agency Client:* Sri Sai Travels
+• *Disruption:* Flight *AI-839* (HYD → DEL (AI-839 Tonight 21:00)) *CANCELLED*
+• *Downstream Risk:* Misses *DEL → Toronto (YYZ) Tomorrow 09:30* + Forfeits Delhi hotel
+
+🎯 *Flyo Recommended Recovery:*
+• *Option O2 (Rank #1):* FL301 [Saves Toronto]
+• *Schedule:* Departs Tonight 23:30 | Arrives Delhi 01:40
+• *Connection Buffer:* *7h 50m* (Safely preserves Toronto flight)
+• *Fare Adjustment:* +₹4200 (Pre-authorized on Corporate VCC *7536)
+
+*Disqualified Options:*
+• *Option O1 (Direct):* 85m buffer (< 120m threshold — Unsafe)
+• *Option O3 (Tomorrow):* Departs 10:00 (Misses Toronto)
+
+• *Option REJECT:* Reject & Escalate to manual airport counter
+
+Tap below to authorize instant headless rebooking:, Buttons: [{id=APPROVE_REBOOK_O2, title=⚡ Approve & Rebook O2}, {id=SELECT_O2, title=Select O2 (FL301)}, {id=REJECT, title=❌ Reject & Escalate}]
+2026-10-29T22:03:40.084+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-5] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] Mock mode active: interactive message logged locally.
+2026-10-29T22:03:48.055+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.r.service.WhatsAppCommandService     : [WhatsApp Bot Ingress] From: 919876543210, Body: null, ButtonId: SELECT_O2
+2026-10-29T22:03:48.056+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.rescue.service.WhatsAppOtpService    : [WhatsApp Security OTP] Generated OTP 433222 for phone 919876543210 (Case: C1, Option: O2, Expires in 5m)
+2026-10-29T22:03:48.057+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound Interactive] To: 919876543210, Body: *[Flyo Security Verification Required]*
+A financial ticket reissue of +₹4,200 has been requested for passenger Ananya Sharma (Option O2).
+
+Your single-use security authorization code is:
+*433222*
+
+Reply *433222* or tap below to authenticate and unlock rebooking:
+, Buttons: [{id=VERIFY_OTP_433222, title=Approve (433222)}, {id=REJECT, title=Reject & Escalate}]
+2026-10-29T22:03:48.057+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] Mock mode active: interactive message logged locally.
+2026-10-29T22:03:50.388+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.r.service.WhatsAppCommandService     : [WhatsApp Bot Ingress] From: 919876543210, Body: null, ButtonId: VERIFY_OTP_433222
+2026-10-29T22:03:50.389+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.rescue.service.WhatsAppOtpService    : [WhatsApp Security OTP] OTP successfully verified for phone 919876543210 (Case: C1, Option: O2)
+2026-10-29T22:03:50.398+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.r.service.PaymentSettlementService   : [Payment Settlement] Issued VCC VCC-C0BC502D for Case C1 (Option O2), Amount: ₹4200
+2026-10-29T22:03:54.541+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.r.service.PaymentSettlementService   : [Payment Settlement] Settlement recorded TXN-803315C1 for Case C1, Amount: ₹4200
+2026-10-29T22:03:54.553+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound Interactive] To: 919876543210, Body: *[Security Authorization Verified]*
+*[ITINERARY SUCCESSFULLY RESCUED]*
+• *Approval:* Option O2 Approved by Flyo Operator — gate is now unlocked
+• *Confirmed Flight:* FL301 (HYD → BOM → DEL) | PNR: *R7X2K9*
+• *Transit:* Toronto (YYZ) connection secured (7h 50m buffer)
+• *Notification:* Passenger Ananya Sharma notified
+, Buttons: [{id=AUDIT, title=View Audit Trail}, {id=STATUS, title=Check All Bookings}]
+2026-10-29T22:03:54.554+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-1] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] Mock mode active: interactive message logged locally.
+2026-10-29T22:03:57.938+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-3] c.f.r.service.WhatsAppCommandService     : [WhatsApp Bot Ingress] From: 919876543210, Body: null, ButtonId: STATUS
+2026-10-29T22:03:57.944+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-3] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] To: 919876543210, Text: *Flyo Today's Bookings (5 Monitored)*:
+
+• *B1* — Ananya Sharma (HYD123)
+   Route: HYD → DEL [AI-839]
+   Status: *Rescued* [Onward: DEL → Toronto (YYZ) Tomorrow 09:30]
+
+• *B2* — Rohit Verma (BLR456)
+   Route: HYD → BLR [6E-402]
+   Status: *On time*
+
+• *B3* — Priya Nair (MAA789)
+   Route: HYD → MAA [AI-542]
+   Status: *On time*
+
+• *B4* — Arjun Reddy (BOM101)
+   Route: HYD → BOM [UK-833]
+   Status: *Checked-in*
+
+• *B5* — Kavya Singh (DEL202)
+   Route: DEL → HYD [6E-901]
+   Status: *On time*
+
+Reply *DISRUPT B1* to test recovery workflow or *BOOK HYD DEL <Name>* to book.
+2026-10-29T22:03:57.945+05:30  INFO 52528 --- [flyo-rescue-backend] [nio-8080-exec-3] c.f.rescue.service.MetaWhatsAppClient    : [Meta WhatsApp Outbound] Mock mode active: message logged without remote HTTP dispatch.
+2026-10-29T23:01:31.616+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=31m13s227ms).
+2026-10-30T00:06:37.063+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h5m5s448ms).
+2026-10-30T00:31:29.587+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=24m22s513ms).
+2026-10-30T01:37:09.236+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h5m9s639ms).
+2026-10-30T03:15:02.034+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h37m52s798ms).
+2026-10-30T04:28:56.167+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h13m24s128ms).
+2026-10-30T05:27:18.772+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=57m52s594ms).
+2026-10-30T06:07:01.803+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=39m43s31ms).
+2026-10-30T06:30:07.233+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=22m35s420ms).
+2026-10-30T07:30:51.060+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h43s827ms).
+2026-10-30T07:56:31.161+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=25m10s92ms).
+2026-10-30T07:58:13.507+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1m12s336ms).
+2026-10-30T08:03:53.855+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=5m40s348ms).
+2026-10-30T08:05:37.133+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1m13s267ms).
+2026-10-30T08:13:05.528+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=7m28s394ms).
+2026-10-30T08:38:31.464+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=18m25s922ms).
+2026-10-30T08:55:21.696+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=16m50s232ms).
+2026-10-30T09:49:43.373+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=52m21s662ms).
+2026-10-30T09:57:47.324+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=8m3s951ms).
+2026-10-30T10:08:22.500+05:30  WARN 52528 --- [flyo-rescue-backend] [l-1 housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=10m5s166ms).

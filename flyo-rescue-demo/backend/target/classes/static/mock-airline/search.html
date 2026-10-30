@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Airline Portal &mdash; Flight Search</title>
+    <link rel="stylesheet" href="/mock-airline/portal.css">
+</head>
+<body>
+    <nav class="portal-nav">
+        <div class="nav-content">
+            <div class="portal-brand">
+                <span>StarSky Airlines</span>
+                <span class="portal-tag">Mock Airline Portal</span>
+            </div>
+            <div>Agency Partner Portal &middot; Flyo Partner ID: <strong>FLY-HYD-99</strong></div>
+        </div>
+    </nav>
+
+    <main class="portal-container">
+        <section class="portal-card">
+            <div class="portal-header">
+                <h2>Flight Disruption Rebooking Search</h2>
+                <p class="portal-desc">Search alternative flight inventory for disrupted itineraries</p>
+            </div>
+
+            <form action="/mock-airline/select" method="GET">
+                <div class="search-form-grid">
+                    <div class="form-group">
+                        <label for="origin-input">Origin Airport</label>
+                        <input type="text" id="origin-input" name="origin" class="form-control" value="HYD (Hyderabad)" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="dest-input">Destination Airport</label>
+                        <input type="text" id="dest-input" name="destination" class="form-control" value="DEL (Delhi)" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="date-input">Travel Date</label>
+                        <input type="text" id="date-input" name="date" class="form-control" value="Tonight / Tomorrow" readonly>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1rem;">
+                    <button type="submit" role="button" class="btn-airline" id="search-flights-btn">
+                        Search Flights
+                    </button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <footer class="portal-footer">
+        <p>StarSky Mock Airline Engine &middot; Local Partner Gateway &middot; http://localhost:8080</p>
+    </footer>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const form = document.querySelector("form");
+        if (form) {
+            ["passenger", "flight", "caseId"].forEach(key => {
+                const val = params.get(key);
+                if (val) {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = key;
+                    input.value = val;
+                    form.appendChild(input);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
