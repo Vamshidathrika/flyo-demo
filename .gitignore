@@ -1,0 +1,10 @@
+target/
+**/target/
+node_modules/
+**/node_modules/
+*.log
+**/*.log
+*.dump
+**/*.dump
+.DS_Store
+**/.DS_Store
