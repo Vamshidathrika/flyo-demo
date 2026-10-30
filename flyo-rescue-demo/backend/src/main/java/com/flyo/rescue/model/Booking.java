@@ -19,6 +19,7 @@ public class Booking {
     private String hotelNote;
     private String agency;
     private String status;
+    private String passengerPhone;
 
     public Booking() {
     }
@@ -35,6 +36,22 @@ public class Booking {
         this.hotelNote = hotelNote;
         this.agency = agency;
         this.status = status;
+        this.passengerPhone = "+919876543210";
+    }
+
+    public Booking(String id, String passengerName, String pnr, String route, String flight,
+                   String dateTime, String onwardFlight, String hotelNote, String agency, String status, String passengerPhone) {
+        this.id = id;
+        this.passengerName = passengerName;
+        this.pnr = pnr;
+        this.route = route;
+        this.flight = flight;
+        this.dateTime = dateTime;
+        this.onwardFlight = onwardFlight;
+        this.hotelNote = hotelNote;
+        this.agency = agency;
+        this.status = status;
+        this.passengerPhone = passengerPhone;
     }
 
     public String getId() {
@@ -115,5 +132,13 @@ public class Booking {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getPassengerPhone() {
+        return passengerPhone != null && !passengerPhone.isBlank() ? passengerPhone : "+919876543210";
+    }
+
+    public void setPassengerPhone(String passengerPhone) {
+        this.passengerPhone = passengerPhone;
     }
 }

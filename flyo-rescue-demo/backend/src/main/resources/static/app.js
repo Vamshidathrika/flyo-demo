@@ -185,7 +185,7 @@ async function simulateCancellation(bookingId) {
     }
 
     try {
-        const response = await fetch(`/api/cases/simulate?bookingId=${encodeURIComponent(bookingId)}&type=CANCELLED`, {
+        const response = await fetch(`/api/cases/simulate?bookingId=${encodeURIComponent(bookingId)}&type=CANCELLED&notifyPassenger=true`, {
             method: "POST"
         });
         if (!response.ok) {
@@ -332,6 +332,16 @@ function renderCase(c, silent = false) {
     const headingEl = document.getElementById("case-heading");
     if (headingEl) headingEl.textContent = `Case ${c.id} — ${c.passengerName}`;
 
+    // Update Passenger WhatsApp header with passenger name & contact
+    const paxHeaderName = document.getElementById("passenger-wa-contact-name");
+    if (paxHeaderName && c.passengerName) {
+        paxHeaderName.innerHTML = `Flyo &middot; ${escapeHtml(c.passengerName)} <span class="whatsapp-verified-badge">&#10003;</span>`;
+    }
+    const paxHeaderSub = document.getElementById("passenger-wa-contact-sub");
+    if (paxHeaderSub && c.passengerPhone) {
+        paxHeaderSub.innerHTML = `<span class="whatsapp-pulse-dot"></span> ${escapeHtml(c.passengerPhone)} &middot; ${escapeHtml(c.state)}`;
+    }
+
     // Update Ananya tab badge
     const tabAnanyaBadge = document.getElementById("tab-ananya-badge");
     if (tabAnanyaBadge) {
@@ -452,26 +462,30 @@ function updateWorkflowStepper(c) {
     s1.classList.add("completed");
     if (d1) d1.classList.add("completed");
 
-    // Step 2: Options
-    if (c.state === "DETECTED") {
+    // Step 2: Passenger Decision & Options
+    const isStep2Active = ["DETECTED", "PASSENGER_NOTIFIED", "AWAITING_PASSENGER_DECISION", "FETCHING_ITINERARY", "SEARCHING_ALTERNATIVES"].includes(c.state);
+    if (isStep2Active) {
         s2.classList.add("active");
     } else {
         s2.classList.add("completed");
         if (d2) d2.classList.add("completed");
     }
 
-    // Step 3: Approval / OTP
-    if (c.approvedOptionId) {
+    // Step 3: Passenger OTP & Approval
+    const isStep3Completed = !!c.approvedOptionId || !!c.passengerOtpVerifiedAt || ["PASSENGER_VERIFIED", "PAYMENT_AUTH_PENDING", "REBOOKING", "VERIFYING_BOOKING", "DONE"].includes(c.state);
+    const isStep3Active = ["OPTIONS_READY", "AWAITING_APPROVAL", "AWAITING_OPTION_SELECTION", "OPTION_SELECTED", "REVALIDATING_OPTION", "AWAITING_PASSENGER_CONFIRMATION", "AWAITING_PASSENGER_OTP", "OTP_FAILED"].includes(c.state);
+
+    if (isStep3Completed) {
         s3.classList.add("completed");
         if (d3) d3.classList.add("completed");
-    } else if (c.state === "AWAITING_APPROVAL" || c.state === "OPTIONS_READY") {
+    } else if (isStep3Active) {
         s3.classList.add("active");
     }
 
     // Step 4: Rebooking Rescued
     if (c.state === "DONE") {
         s4.classList.add("completed");
-    } else if (c.state === "REBOOKING") {
+    } else if (["REBOOKING", "VERIFYING_BOOKING"].includes(c.state)) {
         s4.classList.add("active");
     }
 }
@@ -631,7 +645,55 @@ function WhatsAppMessageBubble({ msg, index }) {
     }
 
     let interactiveButtonsHtml = '';
-    if (isStage2) {
+
+    // Step 2 Interactive Cancellation Notice Actions
+    if (msg.text && (msg.text.includes("RESCUE MY TRIP") || msg.text.includes("What would you like to do?"))) {
+        interactiveButtonsHtml = `
+            <div class="passenger-wa-buttons-tray" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.6rem;">
+                <button onclick="submitPassengerChatInput(null, 'RESCUE_MY_TRIP')" class="wa-action-btn" style="padding:0.55rem; background:#2563eb; color:white; font-size:0.8rem; font-weight:700; border:none; border-radius:6px; cursor:pointer;">
+                    🚀 RESCUE MY TRIP
+                </button>
+                <button onclick="submitPassengerChatInput(null, 'ABANDON_RESCUE')" class="wa-action-btn" style="padding:0.5rem; background:#fee2e2; color:#b91c1c; font-size:0.8rem; font-weight:600; border:1px solid #fca5a5; border-radius:6px; cursor:pointer;">
+                    ❌ ABANDON RESCUE
+                </button>
+            </div>
+        `;
+    }
+    // Step 6 Interactive Flight Option Selection Buttons
+    else if (msg.text && (msg.text.includes("OPTION 1") || msg.text.includes("Fare Difference:")) && !msg.text.includes("confirmation code is")) {
+        interactiveButtonsHtml = `
+            <div class="passenger-wa-buttons-tray" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.6rem;">
+                <button onclick="submitPassengerChatInput(null, 'SELECT_OPTION_O1')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
+                    ✈️ Select Option 1 (FL201 &middot; ₹0)
+                </button>
+                <button onclick="submitPassengerChatInput(null, 'SELECT_OPTION_O2')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
+                    ✈️ Select Option 2 (FL301 &middot; +₹4,200)
+                </button>
+                <button onclick="submitPassengerChatInput(null, 'ABANDON_RESCUE')" class="wa-action-btn" style="padding:0.45rem; background:#f8fafc; color:#64748b; font-size:0.75rem; font-weight:600; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">
+                    ❌ ABANDON RESCUE
+                </button>
+            </div>
+        `;
+    }
+    // Step 7/8 Interactive Passenger OTP Confirmation Prompt
+    else if (msg.text && (msg.text.includes("Your single-use confirmation code is:") || msg.text.includes("Reply *"))) {
+        const otpMatch = msg.text.match(/\*(\d{6})\*/);
+        const otpCode = otpMatch ? otpMatch[1] : "";
+        interactiveButtonsHtml = `
+            <div class="passenger-wa-buttons-tray" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.6rem;">
+                ${otpCode ? `
+                    <button onclick="submitPassengerChatInput('${otpCode}', null)" class="wa-action-btn" style="padding:0.55rem; background:#16a34a; color:white; font-size:0.82rem; font-weight:800; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 4px rgba(22,163,74,0.2);">
+                        🔐 Confirm & Rebook with OTP (${otpCode})
+                    </button>
+                ` : ''}
+                <button onclick="submitPassengerChatInput(null, 'ABANDON_RESCUE')" class="wa-action-btn" style="padding:0.45rem; background:#f8fafc; color:#64748b; font-size:0.75rem; font-weight:600; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">
+                    ❌ ABANDON RESCUE
+                </button>
+            </div>
+        `;
+    }
+    // Stage 2 Boarding Pass Link
+    else if (isStage2 || (pnrCode && msg.text && msg.text.includes("confirmed!"))) {
         interactiveButtonsHtml = `
             <div class="passenger-wa-buttons-tray" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.6rem;">
                 <a href="/mock-airline/confirm.html?pnr=${escapeHtml(pnrCode || 'R7X2K9')}" target="_blank" class="wa-action-btn" style="text-decoration:none; text-align:center; padding:0.45rem; background:#25d366; color:white; font-size:0.75rem; font-weight:700; border-radius:6px; display:block;">
@@ -640,7 +702,7 @@ function WhatsAppMessageBubble({ msg, index }) {
                 <button onclick="sendPassengerQuickReply('Luggage transfer info')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
                     🧳 Luggage Transfer Info
                 </button>
-                <button onclick="alert('Calling Sri Sai Travels Priority Desk: +91 98765 43210')" class="wa-action-btn" style="padding:0.45rem; background:#f8fafc; color:#475569; font-size:0.75rem; font-weight:600; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">
+                <button onclick="alert('Calling Travel Agency Priority Desk: +91 98765 43210')" class="wa-action-btn" style="padding:0.45rem; background:#f8fafc; color:#475569; font-size:0.75rem; font-weight:600; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">
                     📞 Call Travel Desk (+91 98765 43210)
                 </button>
             </div>
@@ -651,7 +713,7 @@ function WhatsAppMessageBubble({ msg, index }) {
                 <button onclick="sendPassengerQuickReply('Flight status')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
                     ✈️ My Itinerary Status
                 </button>
-                <button onclick="alert('Calling Sri Sai Travels Priority Desk: +91 98765 43210')" class="wa-action-btn" style="padding:0.45rem; background:#f8fafc; color:#475569; font-size:0.75rem; font-weight:600; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">
+                <button onclick="alert('Calling Travel Agency Priority Desk: +91 98765 43210')" class="wa-action-btn" style="padding:0.45rem; background:#f8fafc; color:#475569; font-size:0.75rem; font-weight:600; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">
                     📞 Call Travel Desk
                 </button>
             </div>
@@ -691,6 +753,11 @@ async function sendPassengerQuickReply(text) {
 
 function WhatsAppWelcomeNotice() {
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const c = currentActiveCase;
+    const paxName = c && c.passengerName ? c.passengerName : "Passenger";
+    const flight = c && c.flight ? c.flight : "Flight";
+    const seg = c && c.cancelledSegment ? c.cancelledSegment : "Itinerary";
+    const conn = c && c.missedConnection && c.missedConnection !== "None" ? c.missedConnection : "Direct trip";
     return `
         <div class="passenger-wa-bubble bubble-flyo">
             <div class="passenger-wa-bubble-header">
@@ -699,10 +766,10 @@ function WhatsAppWelcomeNotice() {
             </div>
             <div class="bubble-text">
                 <strong>*ACTIVE TRIP MONITORING*</strong><br>
-                • <strong>Passenger:</strong> Ananya Sharma (HYD123)<br>
-                • <strong>Monitored Flight:</strong> AI-839 (HYD → DEL) Tonight 21:00<br>
-                • <strong>Downstream:</strong> DEL → Toronto (YYZ) Tomorrow 09:30<br>
-                • <strong>Notice:</strong> Verified schedule and disruption alerts will post here.
+                • <strong>Passenger:</strong> ${escapeHtml(paxName)}<br>
+                • <strong>Monitored Flight:</strong> ${escapeHtml(flight)} (${escapeHtml(seg)})<br>
+                • <strong>Downstream:</strong> ${escapeHtml(conn)}<br>
+                • <strong>Notice:</strong> Verified schedule and disruption recovery alerts will post here in real time.
             </div>
             <div class="passenger-wa-meta">
                 <span>${timeStr}</span>
@@ -740,24 +807,49 @@ function handlePassengerChatKey(e) {
     }
 }
 
-async function submitPassengerChatInput() {
+async function submitPassengerChatInput(customText, customButtonId) {
     const input = document.getElementById("passenger-chat-input");
-    if (!input) return;
-    const text = input.value.trim();
-    if (!text) return;
+    let text = (customText !== undefined && customText !== null) ? customText : (input ? input.value.trim() : "");
+    if (!text && !customButtonId) return;
 
-    input.value = "";
-    const caseId = currentActiveCase ? currentActiveCase.id : "C1";
+    if (input && (customText === undefined || customText === null)) {
+        input.value = "";
+    }
+
+    const targetCase = currentActiveCase;
+    const caseId = targetCase ? targetCase.id : "C1";
+    const phone = targetCase && targetCase.passengerPhone ? targetCase.passengerPhone : "+919876543210";
 
     try {
-        const response = await fetch(`/api/cases/${caseId}/messages`, {
+        const response = await fetch("/api/whatsapp/simulate-incoming", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sender: "PASSENGER", text: text })
+            body: JSON.stringify({
+                sender: phone,
+                message: text || null,
+                buttonId: customButtonId || null
+            })
         });
-        if (response.ok) {
-            await fetchMessages(caseId);
+
+        // Also save text message to history
+        if (text) {
+            await fetch(`/api/cases/${encodeURIComponent(caseId)}/messages`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sender: "PASSENGER", text: text })
+            }).catch(() => {});
         }
+
+        // Refresh state
+        await fetchCase(caseId);
+        await fetchMessages(caseId);
+        await fetchOptions(caseId);
+        await fetchAudit(caseId);
+        await fetchBookings();
+    } catch (e) {
+        console.error("Error sending passenger WhatsApp command:", e);
+    }
+}
     } catch (e) {
         console.error("Error sending passenger message:", e);
     }

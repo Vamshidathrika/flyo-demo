@@ -42,6 +42,7 @@ public class FlightAlertTest {
             b.setStatus("Checked-in");
             bookingRepository.save(b);
         });
+        rescueCaseRepository.findById("C1").ifPresent(rescueCaseRepository::delete);
     }
 
     @Test

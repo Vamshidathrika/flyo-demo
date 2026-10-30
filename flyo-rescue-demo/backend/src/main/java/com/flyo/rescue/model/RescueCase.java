@@ -37,6 +37,13 @@ public class RescueCase {
     @Column(length = 2000)
     private String manualNextStep;
     
+    private String passengerPhone;
+    private String passengerDecision;
+    private String selectedOptionId;
+    private Integer passengerConfirmedAmount;
+    private String passengerConfirmedCurrency;
+    private LocalDateTime passengerOtpVerifiedAt;
+    
     private LocalDateTime createdAt;
     
     @jakarta.persistence.Version
@@ -204,5 +211,53 @@ public class RescueCase {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getPassengerPhone() {
+        return passengerPhone;
+    }
+
+    public void setPassengerPhone(String passengerPhone) {
+        this.passengerPhone = passengerPhone;
+    }
+
+    public String getPassengerDecision() {
+        return passengerDecision;
+    }
+
+    public void setPassengerDecision(String passengerDecision) {
+        this.passengerDecision = passengerDecision;
+    }
+
+    public String getSelectedOptionId() {
+        return selectedOptionId;
+    }
+
+    public void setSelectedOptionId(String selectedOptionId) {
+        this.selectedOptionId = selectedOptionId;
+    }
+
+    public Integer getPassengerConfirmedAmount() {
+        return passengerConfirmedAmount;
+    }
+
+    public void setPassengerConfirmedAmount(Integer passengerConfirmedAmount) {
+        this.passengerConfirmedAmount = passengerConfirmedAmount;
+    }
+
+    public String getPassengerConfirmedCurrency() {
+        return passengerConfirmedCurrency;
+    }
+
+    public void setPassengerConfirmedCurrency(String passengerConfirmedCurrency) {
+        this.passengerConfirmedCurrency = passengerConfirmedCurrency;
+    }
+
+    public LocalDateTime getPassengerOtpVerifiedAt() {
+        return passengerOtpVerifiedAt;
+    }
+
+    public void setPassengerOtpVerifiedAt(LocalDateTime passengerOtpVerifiedAt) {
+        this.passengerOtpVerifiedAt = passengerOtpVerifiedAt;
     }
 }

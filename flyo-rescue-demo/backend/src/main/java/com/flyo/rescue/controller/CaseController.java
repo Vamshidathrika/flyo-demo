@@ -8,6 +8,7 @@ import com.flyo.rescue.model.RebookOption;
 import com.flyo.rescue.model.RescueCase;
 import com.flyo.rescue.model.SimulatedMessage;
 import com.flyo.rescue.service.AuditService;
+import com.flyo.rescue.service.CancellationNotificationService;
 import com.flyo.rescue.service.CaseService;
 import com.flyo.rescue.service.MessageService;
 import com.flyo.rescue.service.WhatsAppCommandService;
@@ -26,17 +27,20 @@ public class CaseController {
     private static final Logger log = LoggerFactory.getLogger(CaseController.class);
 
     private final CaseService caseService;
+    private final CancellationNotificationService cancellationNotificationService;
     private final AuditService auditService;
     private final MessageService messageService;
     private final WhatsAppCommandService commandService;
     private final WhatsAppConfig whatsAppConfig;
 
     public CaseController(CaseService caseService,
+                          CancellationNotificationService cancellationNotificationService,
                           AuditService auditService,
                           MessageService messageService,
                           WhatsAppCommandService commandService,
                           WhatsAppConfig whatsAppConfig) {
         this.caseService = caseService;
+        this.cancellationNotificationService = cancellationNotificationService;
         this.auditService = auditService;
         this.messageService = messageService;
         this.commandService = commandService;
@@ -46,8 +50,22 @@ public class CaseController {
     @PostMapping("/simulate")
     public ResponseEntity<RescueCase> simulateCase(
             @RequestParam(defaultValue = "B1") String bookingId,
-            @RequestParam(defaultValue = "CANCELLED") String type) {
+            @RequestParam(defaultValue = "CANCELLED") String type,
+            @RequestParam(defaultValue = "false") boolean notifyPassenger) {
+        if (notifyPassenger) {
+            RescueCase rescueCase = cancellationNotificationService.handleFlightCancellation(bookingId, type, "Operations Console");
+            return ResponseEntity.ok(rescueCase);
+        }
         RescueCase rescueCase = caseService.simulateCancellation(bookingId, type);
+        return ResponseEntity.ok(rescueCase);
+    }
+
+    @PostMapping("/disrupt")
+    public ResponseEntity<RescueCase> disruptAndNotify(
+            @RequestParam(defaultValue = "B1") String bookingId,
+            @RequestParam(defaultValue = "CANCELLED") String type,
+            @RequestParam(defaultValue = "Operations Console") String source) {
+        RescueCase rescueCase = cancellationNotificationService.handleFlightCancellation(bookingId, type, source);
         return ResponseEntity.ok(rescueCase);
     }
 

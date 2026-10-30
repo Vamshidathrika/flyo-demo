@@ -98,7 +98,7 @@ public class FlightAlertService {
             // Immediately rank recovery options
             caseService.generateAndRankOptions(rescueCase.getId());
 
-            // Advance state to AWAITING_APPROVAL
+            // Advance state to AWAITING_APPROVAL / OPTIONS_READY
             caseService.getOptionsForCase(rescueCase.getId());
 
             // Log Radar Ingestion in Audit Trail

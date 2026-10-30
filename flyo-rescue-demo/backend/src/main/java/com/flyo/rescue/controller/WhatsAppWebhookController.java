@@ -27,6 +27,7 @@ public class WhatsAppWebhookController {
     private final WhatsAppCommandService commandService;
     private final com.flyo.rescue.service.WhatsAppChatLogService chatLogService;
     private final com.flyo.rescue.service.WhatsAppOtpService otpService;
+    private final com.flyo.rescue.service.PassengerRescueWorkflowService passengerRescueWorkflowService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Idempotency: Process each Meta message ID at most once
@@ -36,12 +37,14 @@ public class WhatsAppWebhookController {
                                      MetaSignatureVerifier signatureVerifier,
                                      WhatsAppCommandService commandService,
                                      com.flyo.rescue.service.WhatsAppChatLogService chatLogService,
-                                     com.flyo.rescue.service.WhatsAppOtpService otpService) {
+                                     com.flyo.rescue.service.WhatsAppOtpService otpService,
+                                     com.flyo.rescue.service.PassengerRescueWorkflowService passengerRescueWorkflowService) {
         this.config = config;
         this.signatureVerifier = signatureVerifier;
         this.commandService = commandService;
         this.chatLogService = chatLogService;
         this.otpService = otpService;
+        this.passengerRescueWorkflowService = passengerRescueWorkflowService;
     }
 
     /**
@@ -133,7 +136,12 @@ public class WhatsAppWebhookController {
         String buttonId = request.get("buttonId");
 
         try {
-            String reply = commandService.processInboundMessage(sender, message, buttonId);
+            String reply;
+            if (passengerRescueWorkflowService.isPassengerMessage(sender, message, buttonId)) {
+                reply = passengerRescueWorkflowService.processPassengerInbound(sender, message, buttonId);
+            } else {
+                reply = commandService.processInboundMessage(sender, message, buttonId);
+            }
             return ResponseEntity.ok(java.util.Map.of(
                     "success", true,
                     "sender", sender,
@@ -228,8 +236,12 @@ public class WhatsAppWebhookController {
                                         }
                                     }
 
-                                    // Dispatch to command processor
-                                    commandService.processInboundMessage(from, textBody, buttonId);
+                                    // Dispatch to passenger workflow or operator command processor
+                                    if (passengerRescueWorkflowService.isPassengerMessage(from, textBody, buttonId)) {
+                                        passengerRescueWorkflowService.processPassengerInbound(from, textBody, buttonId);
+                                    } else {
+                                        commandService.processInboundMessage(from, textBody, buttonId);
+                                    }
                                 }
                             }
                         }

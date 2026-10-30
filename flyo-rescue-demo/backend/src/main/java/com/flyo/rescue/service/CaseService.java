@@ -65,6 +65,9 @@ public class CaseService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + bookingId));
 
+        booking.setStatus("Cancelled");
+        bookingRepository.save(booking);
+
         // Idempotency guard: Return existing active case if present and not terminal
         Optional<RescueCase> existingOpt = caseRepository.findByBookingId(bookingId);
         if (existingOpt.isPresent()) {
@@ -76,9 +79,6 @@ public class CaseService {
                 return existing;
             }
         }
-
-        booking.setStatus("Cancelled");
-        bookingRepository.save(booking);
 
         String caseId = bookingId.equalsIgnoreCase("B1") ? "C1" : "CASE-" + bookingId;
         String cancelledSegment = booking.getRoute() + " (" + booking.getFlight() + " " + booking.getDateTime() + ")";

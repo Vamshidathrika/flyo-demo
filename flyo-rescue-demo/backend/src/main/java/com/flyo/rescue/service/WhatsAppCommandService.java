@@ -462,6 +462,12 @@ public class WhatsAppCommandService {
     }
 
     public String pushDisruptionAlertToChat(String senderPhone, RescueCase c) {
+        String phone = (senderPhone != null && !senderPhone.isBlank())
+                ? senderPhone
+                : (config.getOperatorPhone() != null ? cleanPhone(config.getOperatorPhone()) : "919876543210");
+
+        lastActiveCaseByPhone.put(phone, c.getId());
+
         List<RebookOption> options = optionRepository.findByCaseIdOrderByRankAsc(c.getId());
         if (options.isEmpty()) {
             options = caseService.generateAndRankOptions(c.getId());
@@ -476,27 +482,89 @@ public class WhatsAppCommandService {
         body.append("🚨 *[CRITICAL DISRUPTION DETECTED & RESCUE ALERT]*\n\n")
             .append("• *Passenger:* ").append(c.getPassengerName()).append(" (PNR: ").append(c.getBookingId() != null ? c.getBookingId() : "HYD123").append(")\n")
             .append("• *Agency Client:* Sri Sai Travels\n")
-            .append("• *Disruption:* Flight *").append(c.getFlight()).append("* (").append(c.getCancelledSegment()).append(") *CANCELLED*\n")
-            .append("• *Downstream Risk:* Misses *").append(c.getMissedConnection()).append("* + Forfeits Delhi hotel\n\n")
-            .append("🎯 *Flyo Recommended Recovery:*\n")
-            .append("• *Option O2 (Rank #1):* ").append(topFlight).append(" [Saves Toronto]\n")
-            .append("• *Schedule:* Departs Tonight 23:30 | Arrives Delhi 01:40\n")
-            .append("• *Connection Buffer:* *7h 50m* (Safely preserves Toronto flight)\n")
-            .append("• *Fare Adjustment:* ").append(extraCost).append(" (Pre-authorized on Corporate VCC *7536)\n\n")
-            .append("*Disqualified Options:*\n")
-            .append("• *Option O1 (Direct):* 85m buffer (< 120m threshold — Unsafe)\n")
-            .append("• *Option O3 (Tomorrow):* Departs 10:00 (Misses Toronto)\n\n")
-            .append("• *Option REJECT:* Reject & Escalate to manual airport counter\n\n")
+            .append("• *Disruption:* Flight *").append(c.getFlight()).append("* (").append(c.getCancelledSegment()).append(") *CANCELLED*\n");
+
+        boolean isAnanyaHero = "C1".equalsIgnoreCase(c.getId()) || "B1".equalsIgnoreCase(c.getBookingId())
+                || (c.getPassengerName() != null && c.getPassengerName().toLowerCase().contains("ananya"));
+
+        if (isAnanyaHero) {
+            body.append("• *Downstream Risk:* Misses *").append(c.getMissedConnection()).append("* + Forfeits Delhi hotel\n\n")
+                .append("🎯 *Flyo Recommended Recovery:*\n")
+                .append("• *Option O2 (Rank #1):* ").append(topFlight).append(" [Saves Toronto]\n")
+                .append("• *Schedule:* Departs Tonight 23:30 | Arrives Delhi 01:40\n")
+                .append("• *Connection Buffer:* *7h 50m* (Safely preserves Toronto flight)\n")
+                .append("• *Fare Adjustment:* ").append(extraCost).append(" (Pre-authorized on Corporate VCC *7536)\n\n")
+                .append("*Disqualified Options:*\n")
+                .append("• *Option O1 (Direct):* 85m buffer (< 120m threshold — Unsafe)\n")
+                .append("• *Option O3 (Tomorrow):* Departs 10:00 (Misses Toronto)\n\n");
+        } else {
+            if (c.getMissedConnection() != null && !c.getMissedConnection().equalsIgnoreCase("None") && !c.getMissedConnection().isBlank()) {
+                body.append("• *Downstream Risk:* Misses *").append(c.getMissedConnection()).append("*");
+                if (c.getHotelRisk() != null && !c.getHotelRisk().equalsIgnoreCase("None") && !c.getHotelRisk().isBlank()) {
+                    body.append(" + Forfeits ").append(c.getHotelRisk());
+                }
+                body.append("\n\n");
+            } else {
+                body.append("• *Downstream Risk:* Standalone trip disrupted");
+                if (c.getHotelRisk() != null && !c.getHotelRisk().equalsIgnoreCase("None") && !c.getHotelRisk().isBlank()) {
+                    body.append(" (Risk: ").append(c.getHotelRisk()).append(")");
+                }
+                body.append("\n\n");
+            }
+
+            if (topOption != null) {
+                String topOptId = topOption.getId().contains("-") ? topOption.getId().substring(topOption.getId().lastIndexOf("-") + 1) : topOption.getId();
+                String bufferStr = topOption.getConnectionMinutes() > 0
+                        ? String.format("%dh %02dm", topOption.getConnectionMinutes() / 60, Math.abs(topOption.getConnectionMinutes() % 60))
+                        : "Direct";
+                String savesNote = topOption.isSavesConnection() ? " [Saves Schedule]" : "";
+
+                body.append("🎯 *Flyo Recommended Recovery:*\n")
+                    .append("• *Option ").append(topOptId).append(" (Rank #1):* ").append(topOption.getFlight()).append(" (").append(topOption.getRoute()).append(")").append(savesNote).append("\n")
+                    .append("• *Schedule:* Departs ").append(topOption.getDeparture()).append(" | Arrives ").append(topOption.getArrival()).append("\n")
+                    .append("• *Connection Buffer:* *").append(bufferStr).append("*\n")
+                    .append("• *Fare Adjustment:* ").append(extraCost).append(" (Pre-authorized on Corporate VCC *7536)\n\n");
+            }
+
+            List<RebookOption> alts = options.stream().filter(o -> o.getRank() != 1).toList();
+            if (!alts.isEmpty()) {
+                body.append("*Alternative Options:*\n");
+                for (RebookOption alt : alts) {
+                    String altId = alt.getId().contains("-") ? alt.getId().substring(alt.getId().lastIndexOf("-") + 1) : alt.getId();
+                    String altCost = alt.getExtraCost() > 0 ? "+₹" + alt.getExtraCost() : "₹0";
+                    body.append("• *Option ").append(altId).append(" (").append(alt.getFlight()).append("):* ")
+                        .append(alt.getDeparture()).append(" → ").append(alt.getArrival())
+                        .append(" (").append(altCost).append(")\n");
+                }
+                body.append("\n");
+            }
+        }
+
+        body.append("• *Option REJECT:* Reject & Escalate to manual airport counter\n\n")
             .append("Tap below to authorize instant headless rebooking:");
 
-        List<Map<String, String>> buttons = List.of(
-                Map.of("id", "APPROVE_REBOOK_O2", "title", "⚡ Approve & Rebook O2"),
-                Map.of("id", "SELECT_O2", "title", "Select O2 (FL301)"),
-                Map.of("id", "REJECT", "title", "❌ Reject & Escalate")
-        );
+        String primaryOptCode = topOption != null
+                ? (topOption.getId().contains("-") ? topOption.getId().substring(topOption.getId().lastIndexOf("-") + 1) : topOption.getId())
+                : "O2";
+        String primaryFlight = topOption != null ? topOption.getFlight() : "FL301";
+
+        List<Map<String, String>> buttons;
+        if (isAnanyaHero) {
+            buttons = List.of(
+                    Map.of("id", "APPROVE_REBOOK_O2", "title", "⚡ Approve & Rebook O2"),
+                    Map.of("id", "SELECT_O2", "title", "Select O2 (FL301)"),
+                    Map.of("id", "REJECT", "title", "❌ Reject & Escalate")
+            );
+        } else {
+            buttons = List.of(
+                    Map.of("id", "APPROVE_REBOOK_" + primaryOptCode, "title", "⚡ Rebook " + primaryFlight),
+                    Map.of("id", "SELECT_" + primaryOptCode, "title", "Select " + primaryOptCode + " (" + primaryFlight + ")"),
+                    Map.of("id", "REJECT", "title", "❌ Reject & Escalate")
+            );
+        }
 
         String text = body.toString();
-        whatsAppClient.sendInteractiveButtons(senderPhone, text, buttons);
+        whatsAppClient.sendInteractiveButtons(phone, text, buttons);
         return text;
     }
 
