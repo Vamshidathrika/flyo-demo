@@ -248,14 +248,20 @@ public class CaseService {
             return rescueCase;
         }
 
-        RebookOption option = optionRepository.findById(optionId)
-                .orElseGet(() -> {
-                    if (optionRepository.findByCaseIdOrderByRankAsc(caseId).isEmpty()) {
-                        generateAndRankOptions(caseId);
-                    }
-                    return optionRepository.findById(optionId)
-                            .orElseThrow(() -> new IllegalArgumentException("Invalid optionId: " + optionId));
-                });
+        RebookOption option = optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
+                .filter(o -> o.getId().equals(optionId) || o.getId().equals(caseId + "-" + optionId) || o.getId().endsWith("-" + optionId))
+                .findFirst()
+                .orElseGet(() -> optionRepository.findById(optionId)
+                        .orElseGet(() -> {
+                            if (optionRepository.findByCaseIdOrderByRankAsc(caseId).isEmpty()) {
+                                generateAndRankOptions(caseId);
+                            }
+                            return optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
+                                    .filter(o -> o.getId().equals(optionId) || o.getId().equals(caseId + "-" + optionId) || o.getId().endsWith("-" + optionId))
+                                    .findFirst()
+                                    .orElseGet(() -> optionRepository.findById(optionId)
+                                            .orElseThrow(() -> new IllegalArgumentException("Invalid optionId: " + optionId)));
+                        }));
 
         rescueCase.setApprovedOptionId(option.getId());
         rescueCase.setApprovedBy(approvedBy != null && !approvedBy.isBlank() ? approvedBy : "Flyo Operator");
@@ -334,11 +340,16 @@ public class CaseService {
         }
 
         RebookOption approvedOption = optionRepository.findById(rescueCase.getApprovedOptionId())
-                .orElseGet(() -> {
-                    generateAndRankOptions(caseId);
-                    return optionRepository.findById(rescueCase.getApprovedOptionId())
-                            .orElseThrow(() -> new IllegalArgumentException("Approved option not found: " + rescueCase.getApprovedOptionId()));
-                });
+                .orElseGet(() -> optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
+                        .filter(o -> o.getId().equals(rescueCase.getApprovedOptionId())
+                                || o.getId().equals(caseId + "-" + rescueCase.getApprovedOptionId())
+                                || o.getId().endsWith("-" + rescueCase.getApprovedOptionId()))
+                        .findFirst()
+                        .orElseGet(() -> {
+                            generateAndRankOptions(caseId);
+                            return optionRepository.findById(rescueCase.getApprovedOptionId())
+                                    .orElseThrow(() -> new IllegalArgumentException("Approved option not found: " + rescueCase.getApprovedOptionId()));
+                        }));
 
         stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_REBOOKING, "Flyo Rebook Engine", "Subprocess dispatched to Playwright browser worker");
         caseRepository.save(rescueCase);

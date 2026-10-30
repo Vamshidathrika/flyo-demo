@@ -439,8 +439,9 @@ public class WhatsAppCommandService {
         sb.append("*Available Flight Options:*\n");
 
         for (RebookOption opt : options) {
+            String displayCode = opt.getId().contains("-") ? opt.getId().substring(opt.getId().lastIndexOf("-") + 1) : opt.getId();
             sb.append(String.format("• *Option %s (%s):* %s | %s (+₹%d)\n",
-                    opt.getId(), opt.getFlight(), opt.getDeparture(), opt.getArrival(), opt.getExtraCost()));
+                    displayCode, opt.getFlight(), opt.getDeparture(), opt.getArrival(), opt.getExtraCost()));
         }
         sb.append("\nTap a button below to issue ticket on the airline portal:");
 
@@ -601,7 +602,8 @@ public class WhatsAppCommandService {
 
         StringBuilder sb = new StringBuilder("*Ranked Recovery Options for Case ").append(targetCase).append("*:\n\n");
         for (RebookOption opt : options) {
-            sb.append("• *Rank ").append(opt.getRank()).append(" (Option ").append(opt.getId()).append(")*: ")
+            String displayCode = opt.getId().contains("-") ? opt.getId().substring(opt.getId().lastIndexOf("-") + 1) : opt.getId();
+            sb.append("• *Rank ").append(opt.getRank()).append(" (Option ").append(displayCode).append(")*: ")
                     .append(opt.getFlight()).append(" &middot; ").append(opt.getRoute()).append("\n")
                     .append("   Departure: ").append(opt.getDeparture()).append(" &rarr; Arrival: ").append(opt.getArrival()).append("\n")
                     .append("   Fare Adjustment: ").append(opt.getExtraCost() > 0 ? "+₹" + opt.getExtraCost() : "₹0").append("\n")

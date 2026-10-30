@@ -1,5 +1,7 @@
 package com.flyo.rescue.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -13,9 +15,13 @@ public class VirtualCard {
     private String id;
     private String caseId;
     private String optionId;
+
+    @JsonIgnore
     private String cardNumber;
     private String cardHolder;
     private String expiry;
+
+    @JsonIgnore
     private String cvv;
     private int amount;
     private String currency; // "INR"
@@ -68,6 +74,7 @@ public class VirtualCard {
         this.optionId = optionId;
     }
 
+    @JsonIgnore
     public String getCardNumber() {
         return cardNumber;
     }
@@ -92,6 +99,7 @@ public class VirtualCard {
         this.expiry = expiry;
     }
 
+    @JsonIgnore
     public String getCvv() {
         return cvv;
     }
@@ -140,6 +148,7 @@ public class VirtualCard {
         this.issuedAt = issuedAt;
     }
 
+    @JsonProperty("maskedCardNumber")
     public String getMaskedCardNumber() {
         if (cardNumber != null && cardNumber.length() >= 4) {
             return "•••• •••• •••• " + cardNumber.substring(cardNumber.length() - 4);

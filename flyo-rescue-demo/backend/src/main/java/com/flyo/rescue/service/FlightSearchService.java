@@ -31,11 +31,15 @@ public class FlightSearchService {
             destination = parts[1].trim();
         }
 
+        String o1Id = "C1".equals(caseId) ? "O1" : (caseId + "-O1");
+        String o2Id = "C1".equals(caseId) ? "O2" : (caseId + "-O2");
+        String o3Id = "C1".equals(caseId) ? "O3" : (caseId + "-O3");
+
         // If the classic hero booking (HYD -> DEL to Toronto) is queried, keep canonical spec options
         if (origin.equalsIgnoreCase("HYD") && destination.equalsIgnoreCase("DEL") && onward.toLowerCase().contains("toronto")) {
             return List.of(
                     new RebookOption(
-                            "O1",
+                            o1Id,
                             caseId,
                             "FL201",
                             "HYD → DEL (Direct)",
@@ -48,7 +52,7 @@ public class FlightSearchService {
                             "Rank 3 (Disqualified): Only 85 minutes buffer to onward flight (minimum safe threshold is 120 minutes). High risk of missed international connection."
                     ),
                     new RebookOption(
-                            "O2",
+                            o2Id,
                             caseId,
                             "FL301",
                             "HYD → BOM → DEL (via Mumbai)",
@@ -61,7 +65,7 @@ public class FlightSearchService {
                             "Rank 1: Arrives Delhi Tomorrow 01:40 (7h 50m buffer). Safely preserves onward international connection to Toronto (YYZ 09:30)."
                     ),
                     new RebookOption(
-                            "O3",
+                            o3Id,
                             caseId,
                             "FL401",
                             "HYD → DEL (Direct)",
@@ -86,7 +90,7 @@ public class FlightSearchService {
         int arr1Minutes = 8 * 60 + 5; // 08:05
         int buffer1 = hasOnward ? (onwardDepartureMinutes - arr1Minutes) : 360;
         dynamicOptions.add(new RebookOption(
-                "O1",
+                o1Id,
                 caseId,
                 "FL101",
                 String.format("%s → %s (Direct)", origin, destination),
@@ -103,7 +107,7 @@ public class FlightSearchService {
         int arr2Minutes = 1 * 60 + 40; // 01:40
         int buffer2 = hasOnward ? (onwardDepartureMinutes - arr2Minutes) : 470;
         dynamicOptions.add(new RebookOption(
-                "O2",
+                o2Id,
                 caseId,
                 "FL301",
                 String.format("%s → BOM → %s (Express Hub)", origin, destination),
@@ -120,7 +124,7 @@ public class FlightSearchService {
         int arr3Minutes = 12 * 60 + 15; // 12:15
         int buffer3 = hasOnward ? (onwardDepartureMinutes - arr3Minutes) : 180;
         dynamicOptions.add(new RebookOption(
-                "O3",
+                o3Id,
                 caseId,
                 "FL401",
                 String.format("%s → %s (Direct Daytime)", origin, destination),
