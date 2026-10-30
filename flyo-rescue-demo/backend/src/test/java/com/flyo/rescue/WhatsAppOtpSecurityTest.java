@@ -203,4 +203,25 @@ public class WhatsAppOtpSecurityTest {
         assertEquals("R7X2K9", doneCase.getNewPnr());
         assertTrue(doneCase.getApprovedBy().contains("OTP Verified"));
     }
+
+    @Test
+    @DisplayName("Security: 5 consecutive invalid OTP attempts locks out the phone number for 15 minutes")
+    void testBruteForceLockout() {
+        otpService.createOtpChallenge(OPERATOR_PHONE, "C1", "O2");
+        assertFalse(otpService.isLockedOut(OPERATOR_PHONE));
+
+        // Submit 5 wrong OTPs
+        for (int i = 0; i < 5; i++) {
+            Optional<WhatsAppOtpService.OtpChallenge> res = otpService.verifyOtp(OPERATOR_PHONE, "000000");
+            assertTrue(res.isEmpty());
+        }
+
+        // Phone is now locked out
+        assertTrue(otpService.isLockedOut(OPERATOR_PHONE));
+
+        // Creating challenge when locked out throws IllegalStateException
+        assertThrows(IllegalStateException.class, () -> {
+            otpService.createOtpChallenge(OPERATOR_PHONE, "C1", "O2");
+        });
+    }
 }
