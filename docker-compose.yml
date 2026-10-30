@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  flyo-db:
+    image: postgres:15-alpine
+    container_name: flyo-postgres-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: flyodb
+      POSTGRES_USER: flyo_admin
+      POSTGRES_PASSWORD: flyo_secure_pass_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - flyo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flyo_admin -d flyodb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - flyo-network
+
+  flyo-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flyo-rescue-service
+    restart: unless-stopped
+    depends_on:
+      flyo-db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://flyo-db:5432/flyodb
+      SPRING_DATASOURCE_USERNAME: flyo_admin
+      SPRING_DATASOURCE_PASSWORD: flyo_secure_pass_2026
+      SPRING_FLYWAY_ENABLED: "true"
+      SERVER_PORT: 8080
+      WHATSAPP_META_ENABLED: "false" # Uses mock/sandbox until live Meta Cloud token provided
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    networks:
+      - flyo-network
+
+volumes:
+  flyo_postgres_data:
+    name: flyo_postgres_data
+
+networks:
+  flyo-network:
+    name: flyo-network
+    driver: bridge
