@@ -48,10 +48,9 @@ public class SecurityConfig {
                     "/swagger-ui/**",
                     "/swagger-ui.html"
                 ).permitAll()
-                // Webhook ingress endpoints
+                // Webhook ingress & WhatsApp endpoints
                 .requestMatchers(
-                    "/api/whatsapp/webhook",
-                    "/api/whatsapp/simulate-incoming",
+                    "/api/whatsapp/**",
                     "/api/alerts/**",
                     "/api/ingest/**",
                     "/api/bookings/**",
