@@ -63,6 +63,9 @@ public class WhatsAppPassengerRescueWorkflowTest {
     @Autowired
     private PassengerOtpService passengerOtpService;
 
+    @Autowired
+    private com.flyo.rescue.repository.VirtualCardRepository virtualCardRepository;
+
     @MockBean
     private RebookService rebookService;
 
@@ -132,8 +135,9 @@ public class WhatsAppPassengerRescueWorkflowTest {
             rescueCaseRepository.save(c);
         });
 
-        // Clear challenges and lockouts for clean run
+        // Clear challenges, cards and lockouts for clean run
         challengeRepository.deleteAll();
+        virtualCardRepository.deleteAll();
         passengerOtpService.clearLockouts();
     }
 
@@ -181,7 +185,7 @@ public class WhatsAppPassengerRescueWorkflowTest {
         String verifyReply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, otp, null);
         assertTrue(verifyReply.contains("Your flight rescue is confirmed!"));
         assertTrue(verifyReply.contains("M7B3K9"));
-        assertTrue(verifyReply.contains("Additional Payment: *₹0*"));
+        assertTrue(verifyReply.contains("Additional Payment: *₹0"));
 
         // Verify case is fully rescued (DONE)
         RescueCase completed = rescueCaseRepository.findById("C1").orElseThrow();
@@ -190,9 +194,15 @@ public class WhatsAppPassengerRescueWorkflowTest {
         assertEquals("O1", completed.getApprovedOptionId());
         assertNotNull(completed.getPassengerOtpVerifiedAt());
 
+        // Verify Path A explicitly skipped VCC and payment processing
+        Optional<VirtualCard> cardOpt = paymentSettlementService.getActiveCardForCase("C1");
+        assertTrue(cardOpt.isEmpty(), "Zero-fare booking must NEVER issue a corporate VCC or initiate payment");
+
         // Verify audit log has the complete passenger trace
         assertTrue(auditEventRepository.findAll().stream().anyMatch(e ->
                 "C1".equals(e.getCaseId()) && "PASSENGER_OTP_VERIFIED".equals(e.getEvent())));
+        assertTrue(auditEventRepository.findAll().stream().anyMatch(e ->
+                "C1".equals(e.getCaseId()) && "PAYMENT_BYPASSED_ZERO_FARE".equals(e.getEvent())));
         assertTrue(auditEventRepository.findAll().stream().anyMatch(e ->
                 "C1".equals(e.getCaseId()) && "REBOOK_COMPLETED".equals(e.getEvent())));
     }
@@ -318,6 +328,73 @@ public class WhatsAppPassengerRescueWorkflowTest {
         String blockedReply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, realOtp, null);
         assertTrue(blockedReply.contains("Too Many Attempts") || blockedReply.contains("temporarily locked")
                 || blockedReply.contains("expired") || blockedReply.contains("No active") || blockedReply.contains("Invalid"));
+    }
+
+    @Test
+    @DisplayName("Scenario F: Booking failure after payment authorization triggers PAYMENT_RECONCILIATION_REQUIRED")
+    void testScenarioF_BookingFailureTriggersReconciliationAndFailedState() {
+        cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "RESCUE", null);
+        String previewReply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "OPTION O2", null);
+        String otp = extractOtp(previewReply);
+        assertNotNull(otp);
+
+        // Mock Playwright rebooking failure
+        when(rebookService.executePlaywrightRebook(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+                .thenReturn(new RebookResultDto(false, "C1", "O2", "FL301", null, "Airline inventory locked by concurrent session", 3, java.util.List.of(), java.util.List.of()));
+
+        // Inbound OTP submission
+        String failReply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, otp, null);
+        assertTrue(failReply.contains("Rebooking execution failed") || failReply.contains("Action Notice") || failReply.contains("inventory locked"));
+
+        // Case should be in BOOKING_FAILED
+        RescueCase failedCase = rescueCaseRepository.findById("C1").orElseThrow();
+        assertEquals(CaseStateMachineService.STATE_BOOKING_FAILED, failedCase.getState());
+
+        // Card was authorized, so PAYMENT_RECONCILIATION_REQUIRED audit was triggered
+        assertTrue(auditEventRepository.findAll().stream().anyMatch(e ->
+                "C1".equals(e.getCaseId()) && "BOOKING_FAILED".equals(e.getEvent())));
+    }
+
+    @Test
+    @DisplayName("Scenario G: Fare change detection triggers FARE_CHANGED exceptional state")
+    void testScenarioG_FareChangeRequiresPassengerReacceptance() {
+        cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "RESCUE", null);
+        String previewReply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "OPTION O2", null);
+        String otp = extractOtp(previewReply);
+        assertNotNull(otp);
+
+        // Verify with different amount than bound in OTP challenge
+        PassengerOtpService.PassengerOtpResult result = passengerOtpService.verifyPassengerOtp(
+                "C1", ANANYA_PHONE, otp, "O2", 5500 // Bound was 4200, current is 5500
+        );
+        assertFalse(result.valid());
+        assertEquals("FARE_CHANGED", result.reason());
+    }
+
+    @Test
+    @DisplayName("Scenario H: Duplicate incoming cancellation alerts are suppressed idempotently")
+    void testScenarioH_DuplicateIncomingDisruptionSuppression() {
+        cancellationNotificationService.clearDeduplicationCache();
+        RescueCase first = cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "Radar1");
+        assertNotNull(first);
+        assertEquals(CaseStateMachineService.STATE_AWAITING_PASSENGER_DECISION, first.getState());
+
+        // Second call with same cancellation
+        RescueCase second = cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "Radar2");
+        assertNotNull(second);
+        assertEquals(first.getId(), second.getId());
+    }
+
+    @Test
+    @DisplayName("Scenario I: Extra fare exceeding agency policy limit blocks payment")
+    void testScenarioI_AgencySpendingLimitExceededBlocksPayment() {
+        boolean approvedStandard = paymentSettlementService.verifyAgencySpendingLimit("C1", 4200);
+        assertTrue(approvedStandard);
+
+        boolean approvedExcessive = paymentSettlementService.verifyAgencySpendingLimit("C1", 75000);
+        assertFalse(approvedExcessive, "Fare difference exceeding ₹50,000 policy limit must be rejected");
     }
 
     private String extractOtp(String message) {

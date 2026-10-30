@@ -141,14 +141,24 @@ public class PassengerRescueWorkflowService {
 
         if (result.valid()) {
             // Steps 9, 10 & 11: Execute rebooking workflow (with payment authorization if positive fare)
-            RescueCase completedCase = rebookingService.executeRebookingWorkflow(rescueCase.getId(), passengerPhone);
+            try {
+                RescueCase completedCase = rebookingService.executeRebookingWorkflow(rescueCase.getId(), passengerPhone);
 
-            String newPnr = completedCase.getNewPnr();
-            RebookOption booked = optionRepository.findById(completedCase.getApprovedOptionId()).orElse(null);
+                if (CaseStateMachineService.STATE_BOOKING_FAILED.equals(completedCase.getState())
+                        || CaseStateMachineService.STATE_PAYMENT_RECONCILIATION_REQUIRED.equals(completedCase.getState())) {
+                    return "⚠️ *[Action Notice]*: Rebooking execution failed: " + completedCase.getError();
+                }
 
-            return messagingService.sendBookingConfirmation(
-                    passengerPhone, completedCase, booked, newPnr, "VCC-SETTLED"
-            );
+                String newPnr = completedCase.getNewPnr();
+                RebookOption booked = optionRepository.findById(completedCase.getApprovedOptionId()).orElse(null);
+
+                return messagingService.sendBookingConfirmation(
+                        passengerPhone, completedCase, booked, newPnr, "VCC-SETTLED"
+                );
+            } catch (Exception e) {
+                log.error("[Passenger Rescue] Rebooking failed after verification for case {}: {}", rescueCase.getId(), e.getMessage());
+                return "⚠️ *[Action Notice]*: Rebooking execution failed: " + e.getMessage();
+            }
         } else {
             // Send failure notification with guidance
             return messagingService.sendOtpFailedNotice(passengerPhone, result.reason());

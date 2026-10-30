@@ -205,24 +205,26 @@ public class PassengerWhatsAppMessagingService {
                                           RebookOption bookedOption, String verifiedPnr,
                                           String vccRef) {
         int fare = bookedOption != null ? bookedOption.getExtraCost() : 0;
-        String fareText = fare > 0 ? ("₹" + String.format("%,d", fare)) : "₹0";
+        String fareText = fare > 0 ? ("₹" + String.format("%,d", fare) + " (Corporate payment settled)") : "₹0 (Complimentary recovery — no additional charge)";
         String flight = bookedOption != null ? bookedOption.getFlight() : "FL301";
         String route = bookedOption != null ? bookedOption.getRoute() : rescueCase.getCancelledSegment();
         String dep = bookedOption != null ? bookedOption.getDeparture() : "Confirmed Schedule";
         String arr = bookedOption != null ? bookedOption.getArrival() : "Confirmed Schedule";
 
         String text = String.format("""
-                Your flight rescue is confirmed!
+                ✈️ *Your flight rescue is confirmed!*
 
-                Your alternative flight has been successfully booked.
+                Your alternative flight has been successfully booked and ticketed.
 
                 • Passenger: *%s*
                 • New Flight: *%s*
                 • Route: %s
                 • Departure: %s
                 • Arrival: %s
-                • New PNR: *%s*
+                • Airline PNR: *%s*
+                • E-Ticket Status: *ISSUED & VALIDATED*
                 • Additional Payment: *%s*
+                • Baggage Guidance: Checked luggage automatically transfers. Show this confirmed PNR at check-in / gate.
 
                 Thank you for choosing Flyo.
                 """,

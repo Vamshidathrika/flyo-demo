@@ -119,7 +119,14 @@ public class PassengerConfirmationService {
                 );
                 rescueCaseRepository.save(rescueCase);
             } else if ("LOCKED_OUT".equalsIgnoreCase(result.reason())) {
-                if (!CaseStateMachineService.STATE_ESCALATED.equals(rescueCase.getState())) {
+                if (!CaseStateMachineService.STATE_ESCALATED.equals(rescueCase.getState())
+                        && !CaseStateMachineService.STATE_LOCKED_OUT.equals(rescueCase.getState())) {
+                    stateMachineService.transition(
+                            rescueCase,
+                            CaseStateMachineService.STATE_LOCKED_OUT,
+                            "Flyo Security Engine",
+                            "Passenger locked out after 5 consecutive invalid OTP attempts"
+                    );
                     stateMachineService.transition(
                             rescueCase,
                             CaseStateMachineService.STATE_ESCALATED,

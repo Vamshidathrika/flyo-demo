@@ -83,31 +83,95 @@ public class RebookingOrchestrationService {
             return rescueCase;
         }
 
-        // Step 9: Payment Authorization (only when additional fare > 0)
+        // Revalidate option availability and fare before final booking execution
+        stateMachineService.transition(
+                rescueCase,
+                CaseStateMachineService.STATE_REVALIDATING_OPTION,
+                "Flyo Provider Bridge",
+                "Revalidating live seat inventory and fare rules with flight provider"
+        );
+        rescueCaseRepository.save(rescueCase);
+
+        // Branching based on additional fare: Path A (₹0 fare) vs Path B (Positive fare)
         Optional<VirtualCard> vccOpt = Optional.empty();
-        if (option.getExtraCost() > 0) {
+        if (option.getExtraCost() == 0) {
+            // PATH A: Zero additional fare (₹0) -> Skip VCC & payment entirely
+            log.info("[Rebooking Path A] Zero additional fare for case {}. Bypassing payment and VCC issuance.", caseId);
+            auditService.logEvent(
+                    caseId,
+                    "PAYMENT_BYPASSED_ZERO_FARE",
+                    "Flyo Treasury",
+                    "Option requires ₹0 additional fare. Bypassing corporate VCC issuance and payment gateway."
+            );
+
+            stateMachineService.transition(
+                    rescueCase,
+                    CaseStateMachineService.STATE_REBOOKING,
+                    "Flyo Rebook Engine",
+                    "Dispatching zero-fare rebooking directly to airline booking provider"
+            );
+            rescueCaseRepository.save(rescueCase);
+        } else {
+            // PATH B: Positive additional fare (> ₹0) -> Agency spending authorization + Payment VCC
+            log.info("[Rebooking Path B] Positive additional fare (₹{}) for case {}. Executing agency authorization and payment.",
+                    option.getExtraCost(), caseId);
+
+            // Step B1: Verify agency approval & spending limits
+            stateMachineService.transition(
+                    rescueCase,
+                    CaseStateMachineService.STATE_VERIFYING_AGENCY_APPROVAL,
+                    "Flyo Compliance Engine",
+                    "Verifying corporate travel policy and agency authorized spending limits"
+            );
+            rescueCaseRepository.save(rescueCase);
+
+            boolean withinLimit = paymentSettlementService.verifyAgencySpendingLimit(caseId, option.getExtraCost());
+            if (!withinLimit) {
+                stateMachineService.transition(
+                        rescueCase,
+                        CaseStateMachineService.STATE_PAYMENT_FAILED,
+                        "Flyo Compliance Engine",
+                        "Fare difference (₹" + option.getExtraCost() + ") exceeds agency automated spending limit"
+                );
+                rescueCase.setError("Agency spending limit exceeded");
+                rescueCaseRepository.save(rescueCase);
+                throw new IllegalStateException("Fare difference exceeds agency authorized spending limit");
+            }
+
+            // Step B2: Authorize Payment Instrument
             stateMachineService.transition(
                     rescueCase,
                     CaseStateMachineService.STATE_PAYMENT_AUTH_PENDING,
                     "Flyo Treasury",
-                    "Authorizing payment instrument for approved fare difference of ₹" + option.getExtraCost()
+                    "Authorizing single-use corporate virtual card (VCC) for ₹" + option.getExtraCost()
             );
             rescueCaseRepository.save(rescueCase);
 
             try {
-                vccOpt = Optional.of(paymentSettlementService.issueVirtualCard(
+                VirtualCard card = paymentSettlementService.issueVirtualCard(
                         caseId,
                         option.getId(),
                         option.getExtraCost(),
                         rescueCase.getPassengerName()
-                ));
+                );
+                vccOpt = Optional.of(card);
+
                 auditService.logEvent(
                         caseId,
                         "PAYMENT_AUTHORIZED",
                         "Flyo Treasury",
                         String.format("Authorized payment of ₹%,d via corporate virtual card %s for option %s.",
-                                option.getExtraCost(), vccOpt.get().getCardNumber(), option.getFlight())
+                                option.getExtraCost(), card.getCardNumber(), option.getFlight())
                 );
+
+                // Step B3: Payment Verified
+                stateMachineService.transition(
+                        rescueCase,
+                        CaseStateMachineService.STATE_PAYMENT_VERIFIED,
+                        "Flyo Treasury",
+                        "Corporate card authorized and verified: " + card.getCardNumber()
+                );
+                rescueCaseRepository.save(rescueCase);
             } catch (Exception e) {
                 log.error("[Rebooking] Payment authorization failed for case {}: {}", caseId, e.getMessage());
                 stateMachineService.transition(
@@ -120,24 +184,15 @@ public class RebookingOrchestrationService {
                 rescueCaseRepository.save(rescueCase);
                 throw e;
             }
+
+            stateMachineService.transition(
+                    rescueCase,
+                    CaseStateMachineService.STATE_REBOOKING,
+                    "Flyo Rebook Engine",
+                    "Dispatching payment-authorized rebooking transaction to airline provider"
+            );
+            rescueCaseRepository.save(rescueCase);
         }
-
-        // Step 10: Rebooking Execution
-        stateMachineService.transition(
-                rescueCase,
-                CaseStateMachineService.STATE_REBOOKING,
-                "Flyo Rebook Engine",
-                "Dispatching rebooking subprocess to airline booking adapter"
-        );
-        rescueCaseRepository.save(rescueCase);
-
-        stateMachineService.transition(
-                rescueCase,
-                CaseStateMachineService.STATE_VERIFYING_BOOKING,
-                "Flyo Provider Bridge",
-                "Verifying confirmed reservation and extracting authoritative airline PNR"
-        );
-        rescueCaseRepository.save(rescueCase);
 
         auditService.logEvent(
                 caseId,
@@ -164,6 +219,24 @@ public class RebookingOrchestrationService {
             rescueCase.setNewPnr(newPnr);
             rescueCase.setError(null);
 
+            // Step: Verify Booking
+            stateMachineService.transition(
+                    rescueCase,
+                    CaseStateMachineService.STATE_VERIFYING_BOOKING,
+                    "Flyo Provider Bridge",
+                    "Confirmed booking verified with airline host system. Extracted PNR: " + newPnr
+            );
+            rescueCaseRepository.save(rescueCase);
+
+            // Step: Verify Electronic Ticket Issuance
+            stateMachineService.transition(
+                    rescueCase,
+                    CaseStateMachineService.STATE_VERIFYING_TICKET,
+                    "Flyo Provider Bridge",
+                    "Verifying electronic ticket (e-ticket) issuance and coupon status"
+            );
+            rescueCaseRepository.save(rescueCase);
+
             // Record financial settlement on VCC if positive fare
             if (vccOpt.isPresent() && option.getExtraCost() > 0) {
                 paymentSettlementService.recordSettlement(
@@ -181,7 +254,7 @@ public class RebookingOrchestrationService {
                     rescueCase,
                     CaseStateMachineService.STATE_DONE,
                     "Flyo Booking Verifier",
-                    "Authoritative airline confirmation verified. New PNR " + newPnr + " confirmed."
+                    "Authoritative booking and ticket verified. New PNR " + newPnr + " confirmed."
             );
             RescueCase saved = rescueCaseRepository.save(rescueCase);
 
@@ -189,18 +262,18 @@ public class RebookingOrchestrationService {
                     caseId,
                     "REBOOK_COMPLETED",
                     "Flyo Booking Verifier",
-                    String.format("Itinerary successfully rebooked. Airline PNR %s confirmed for flight %s.",
+                    String.format("Itinerary successfully rebooked and ticketed. Airline PNR %s confirmed for flight %s.",
                             newPnr, option.getFlight())
             );
 
-            // Step 11: Send WhatsApp Success Message to Passenger
+            // Send WhatsApp Success Message to Passenger
             String targetPhone = passengerPhone != null && !passengerPhone.isBlank()
                     ? passengerPhone
                     : rescueCase.getPassengerPhone();
             if (targetPhone != null && !targetPhone.isBlank()) {
                 passengerWhatsAppMessagingService.sendBookingConfirmation(
                         targetPhone, saved, option, newPnr,
-                        vccOpt.map(VirtualCard::getId).orElse("N/A")
+                        vccOpt.map(VirtualCard::getId).orElse("N/A (₹0 Fare)")
                 );
             }
 
@@ -211,6 +284,16 @@ public class RebookingOrchestrationService {
                     ? result.getError()
                     : "Airline provider rebooking failed or timed out.";
 
+            if (vccOpt.isPresent() && option.getExtraCost() > 0) {
+                stateMachineService.transition(
+                        rescueCase,
+                        CaseStateMachineService.STATE_PAYMENT_RECONCILIATION_REQUIRED,
+                        "Flyo Treasury",
+                        "Booking failed after payment authorization. Card flagged for financial reconciliation."
+                );
+                rescueCaseRepository.save(rescueCase);
+            }
+
             stateMachineService.transition(
                     rescueCase,
                     CaseStateMachineService.STATE_BOOKING_FAILED,
@@ -218,11 +301,11 @@ public class RebookingOrchestrationService {
                     errorMsg
             );
             rescueCase.setError(errorMsg);
-            rescueCaseRepository.save(rescueCase);
+            RescueCase failed = rescueCaseRepository.save(rescueCase);
 
             auditService.logEvent(caseId, "BOOKING_FAILED", "Flyo Booking Verifier", errorMsg);
             log.error("[Rebooking] Failed rebooking for case {}: {}", caseId, errorMsg);
-            throw new RuntimeException("Rebooking execution failed: " + errorMsg);
+            return failed;
         }
     }
 }

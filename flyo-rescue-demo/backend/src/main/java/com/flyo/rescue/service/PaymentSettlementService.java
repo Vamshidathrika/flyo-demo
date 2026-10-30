@@ -47,4 +47,14 @@ public class PaymentSettlementService {
     public String getActivePaymentProviderName() {
         return paymentAdapter.getProviderName();
     }
+
+    /**
+     * Verifies that the proposed rebooking fare difference complies with corporate travel policy
+     * and agency authorized spending limits.
+     */
+    public boolean verifyAgencySpendingLimit(String caseId, int amount) {
+        // Standard policy: maximum automated recovery limit is ₹50,000 per disruption
+        int policySpendingLimit = 50000;
+        return amount <= policySpendingLimit;
+    }
 }
