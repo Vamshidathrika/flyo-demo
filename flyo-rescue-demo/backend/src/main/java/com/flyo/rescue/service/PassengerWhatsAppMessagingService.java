@@ -30,14 +30,11 @@ public class PassengerWhatsAppMessagingService {
     private static final Logger log = LoggerFactory.getLogger(PassengerWhatsAppMessagingService.class);
 
     private final MetaWhatsAppClient whatsAppClient;
-    private final WhatsAppChatLogService chatLogService;
     private final MessageService messageService;
 
     public PassengerWhatsAppMessagingService(MetaWhatsAppClient whatsAppClient,
-                                            WhatsAppChatLogService chatLogService,
                                             MessageService messageService) {
         this.whatsAppClient = whatsAppClient;
-        this.chatLogService = chatLogService;
         this.messageService = messageService;
     }
 

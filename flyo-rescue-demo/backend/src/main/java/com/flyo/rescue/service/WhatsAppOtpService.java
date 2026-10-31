@@ -18,9 +18,9 @@ public class WhatsAppOtpService {
 
     private static final Logger log = LoggerFactory.getLogger(WhatsAppOtpService.class);
     private static final SecureRandom RANDOM = new SecureRandom();
-    private static final int OTP_VALIDITY_MINUTES = 5;
+    private static final int OTP_VALIDITY_MINUTES = 10;
     private static final int MAX_FAILED_ATTEMPTS = 5;
-    private static final int LOCKOUT_MINUTES = 15;
+    private static final int LOCKOUT_MINUTES = 30;
 
     public record OtpChallenge(
             String phone,

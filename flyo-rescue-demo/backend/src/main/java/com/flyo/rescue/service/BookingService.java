@@ -82,7 +82,8 @@ public class BookingService {
                         "DEL → Toronto (YYZ) Tomorrow 09:30",
                         "Delhi hotel non-refundable",
                         "Flyo",
-                        "Checked-in"
+                        "Checked-in",
+                        "+919876543210"
                 ),
                 new Booking(
                         "B2",
@@ -94,7 +95,8 @@ public class BookingService {
                         "None",
                         "None",
                         "Flyo",
-                        "On time"
+                        "On time",
+                        "+919811223344"
                 ),
                 new Booking(
                         "B3",
@@ -106,7 +108,8 @@ public class BookingService {
                         "None",
                         "None",
                         "Flyo",
-                        "On time"
+                        "On time",
+                        "+919822334455"
                 ),
                 new Booking(
                         "B4",
@@ -118,7 +121,8 @@ public class BookingService {
                         "None",
                         "None",
                         "Flyo",
-                        "On time"
+                        "On time",
+                        "+919833445566"
                 ),
                 new Booking(
                         "B5",
@@ -130,7 +134,8 @@ public class BookingService {
                         "None",
                         "None",
                         "Flyo",
-                        "On time"
+                        "On time",
+                        "+919844556677"
                 )
         );
         return bookingRepository.saveAll(seedBookings);

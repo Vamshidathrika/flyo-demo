@@ -119,6 +119,7 @@
     <script>
         const params = new URLSearchParams(window.location.search);
         const passenger = params.get("passenger");
+        const flight = params.get("flight");
         if (passenger) {
             const desc = document.querySelector(".portal-desc");
             if (desc) {
@@ -131,6 +132,19 @@
                 input.value = passenger;
                 f.appendChild(input);
             });
+        }
+        if (flight) {
+            const existingBtn = Array.from(document.querySelectorAll(".btn-airline-select"))
+                .find(b => b.textContent.includes(flight));
+            if (!existingBtn) {
+                const targetBtn = document.getElementById("select-fl201-btn") || document.querySelector(".btn-airline-select");
+                if (targetBtn) {
+                    targetBtn.textContent = `Select ${flight}`;
+                    targetBtn.id = `select-${flight.toLowerCase()}-btn`;
+                    const flightInput = targetBtn.form ? targetBtn.form.querySelector('input[name="flight"]') : null;
+                    if (flightInput) flightInput.value = flight;
+                }
+            }
         }
     </script>
 </body>

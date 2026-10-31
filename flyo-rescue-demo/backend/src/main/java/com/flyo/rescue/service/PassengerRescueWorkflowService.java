@@ -251,8 +251,13 @@ public class PassengerRescueWorkflowService {
                 String payload = btn.substring("SELECT_OPTION_".length());
                 if (payload.contains("_")) {
                     String[] parts = payload.split("_", 2);
-                    caseId = parts[0];
-                    optionCode = parts[1];
+                    if (parts[0].matches("^O[0-9]+$") || parts[0].matches("^OPT-.*")) {
+                        optionCode = parts[0];
+                        caseId = parts[1];
+                    } else {
+                        caseId = parts[0];
+                        optionCode = parts[1];
+                    }
                 } else {
                     optionCode = payload;
                 }
@@ -273,8 +278,13 @@ public class PassengerRescueWorkflowService {
             String code = payload;
             if (payload.contains("_")) {
                 String[] parts = payload.split("_", 2);
-                caseId = parts[0];
-                code = parts[1];
+                if (parts[0].matches("^[0-9]{6}$")) {
+                    code = parts[0];
+                    caseId = parts[1];
+                } else {
+                    caseId = parts[0];
+                    code = parts[1];
+                }
             }
             return handleOtpSubmission(phone, caseId, code);
         }
@@ -329,10 +339,9 @@ public class PassengerRescueWorkflowService {
     private String extractCaseIdFromToken(String token, String defaultVal) {
         if (token == null) return defaultVal;
         String[] parts = token.split("_");
-        if (parts.length > 1) {
-            String last = parts[parts.length - 1];
-            if (last.startsWith("CASE-") || last.matches("^C[0-9]+$")) {
-                return last;
+        for (String p : parts) {
+            if (p.startsWith("CASE-") || p.matches("^C[0-9]+$")) {
+                return p;
             }
         }
         return defaultVal;

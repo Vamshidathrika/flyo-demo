@@ -132,39 +132,45 @@ public class CaseController {
         SimulatedMessage userMsg = messageService.sendCustomMessage(id, sender, "Flyo Support", text);
 
         String lower = text.toLowerCase();
+        RescueCase c = caseService.getCaseById(id).orElse(null);
+        String pnr = (c != null && c.getNewPnr() != null) ? c.getNewPnr() : "R7X2K9";
+        String paxName = (c != null && c.getPassengerName() != null) ? c.getPassengerName() : "Passenger";
+        String paxPhone = (c != null && c.getPassengerPhone() != null) ? c.getPassengerPhone() : "+91 98765 43210";
+        String route = (c != null && c.getCancelledSegment() != null) ? c.getCancelledSegment() : "Disrupted Flight Route";
+
         if (lower.contains("luggage") || lower.contains("baggage") || lower.contains("bag") || lower.contains("transit") || lower.contains("pax_baggage_info")) {
-            RescueCase c = caseService.getCaseById(id).orElse(null);
-            String pnr = (c != null && c.getNewPnr() != null) ? c.getNewPnr() : "R7X2K9";
-            String paxName = (c != null && c.getPassengerName() != null) ? c.getPassengerName() : "Ananya Sharma";
             messageService.sendLuggageTransitGuide(id, paxName, pnr);
             return ResponseEntity.ok(userMsg);
         } else if (lower.contains("status") || lower.contains("ticket") || lower.contains("boarding") || lower.contains("pax_status")) {
-            RescueCase c = caseService.getCaseById(id).orElse(null);
-            String pnr = (c != null && c.getNewPnr() != null) ? c.getNewPnr() : "R7X2K9";
-            String paxName = (c != null && c.getPassengerName() != null) ? c.getPassengerName() : "Ananya Sharma";
             messageService.sendPassengerConfirmedTicket(
                     id,
                     paxName,
-                    "FL301",
+                    (c != null && c.getFlight() != null) ? c.getFlight() : "FL301",
                     pnr,
-                    "Hyderabad (HYD) → Mumbai (BOM) → Delhi (DEL)",
-                    "Tonight at 23:30 (Terminal 1)",
-                    "Tomorrow at 01:40 AM (Terminal 3)"
+                    route,
+                    "Confirmed Schedule",
+                    "Confirmed Arrival"
             );
             return ResponseEntity.ok(userMsg);
         }
 
         String replyText;
         if (lower.contains("hotel")) {
-            replyText = "*HOTEL RESERVATION UPDATE*\n• *Property:* Delhi Airport Transit Hotel\n• *Check-in:* Adjusted for late arrival (01:40)\n• *Status:* Confirmed and guaranteed";
+            String hotelInfo = (c != null && c.getHotelRisk() != null && !c.getHotelRisk().equalsIgnoreCase("None"))
+                    ? c.getHotelRisk()
+                    : "Transit Accommodations";
+            replyText = "*HOTEL RESERVATION UPDATE*\n• *Property:* " + hotelInfo + "\n• *Check-in:* Adjusted for late arrival\n• *Status:* Confirmed and guaranteed";
         } else if (lower.contains("toronto") || lower.contains("connection")) {
-            replyText = "*TRANSIT CONNECTION TIMELINE*\n• *Delhi Arrival:* FL301 touches down at 01:40\n• *Toronto Departure:* Leaves on schedule at 09:30\n• *Safe Buffer:* 7 hours 50 minutes";
+            String connInfo = (c != null && c.getMissedConnection() != null && !c.getMissedConnection().equalsIgnoreCase("None"))
+                    ? c.getMissedConnection()
+                    : "Direct transit protected";
+            replyText = "*TRANSIT CONNECTION TIMELINE*\n• *Connection:* " + connInfo + "\n• *Safe Buffer:* Adequate recovery buffer maintained";
         } else if (lower.contains("thank") || lower.contains("thanks")) {
-            replyText = "*FLYO PASSENGER SUPPORT*\n• *Status:* You are welcome, Ananya\n• *Monitoring:* Operations team is tracking your transit";
+            replyText = "*FLYO PASSENGER SUPPORT*\n• *Status:* You are welcome, " + paxName + "\n• *Monitoring:* Operations team is tracking your transit";
         } else {
-            replyText = "✈️ *Sri Sai Travels · Priority Passenger Concierge*\n\nHello Ananya! Operations is tracking your journey.\nReply *BAGGAGE* for transfer instructions or *STATUS* for your updated e-ticket.";
+            replyText = "✈️ *Flyo · Priority Passenger Concierge*\n\nHello " + paxName + "! Operations is tracking your journey.\nReply *BAGGAGE* for transfer instructions or *STATUS* for your updated e-ticket.";
         }
-        messageService.sendCustomMessage(id, "SENT_SIMULATED", "Ananya Sharma (+91 98765 43210)", replyText);
+        messageService.sendCustomMessage(id, "SENT_SIMULATED", paxName + " (" + paxPhone + ")", replyText);
 
         return ResponseEntity.ok(userMsg);
     }

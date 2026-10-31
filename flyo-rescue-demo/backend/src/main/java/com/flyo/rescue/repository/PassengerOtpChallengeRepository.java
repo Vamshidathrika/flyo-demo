@@ -12,6 +12,8 @@ public interface PassengerOtpChallengeRepository extends JpaRepository<Passenger
 
     List<PassengerOtpChallenge> findByCaseIdOrderByCreatedAtDesc(String caseId);
 
+    Optional<PassengerOtpChallenge> findTopByCaseIdAndVerifiedFalseOrderByCreatedAtDesc(String caseId);
+
     Optional<PassengerOtpChallenge> findTopByPassengerPhoneAndCaseIdAndVerifiedFalseOrderByCreatedAtDesc(
             String passengerPhone, String caseId);
 

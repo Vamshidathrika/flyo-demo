@@ -39,7 +39,8 @@ public class FlyoDataSeeder implements CommandLineRunner {
                             "DEL → Toronto (YYZ) Tomorrow 09:30",
                             "Delhi hotel non-refundable",
                             "Flyo",
-                            "Checked-in"
+                            "Checked-in",
+                            "+919876543210"
                     ),
                     new Booking(
                             "B2",
@@ -51,7 +52,8 @@ public class FlyoDataSeeder implements CommandLineRunner {
                             "None",
                             "None",
                             "Flyo",
-                            "On time"
+                            "On time",
+                            "+919811223344"
                     ),
                     new Booking(
                             "B3",
@@ -63,7 +65,8 @@ public class FlyoDataSeeder implements CommandLineRunner {
                             "None",
                             "None",
                             "Flyo",
-                            "On time"
+                            "On time",
+                            "+919822334455"
                     ),
                     new Booking(
                             "B4",
@@ -75,7 +78,8 @@ public class FlyoDataSeeder implements CommandLineRunner {
                             "None",
                             "Airport transit",
                             "Flyo",
-                            "Checked-in"
+                            "Checked-in",
+                            "+919833445566"
                     ),
                     new Booking(
                             "B5",
@@ -87,7 +91,8 @@ public class FlyoDataSeeder implements CommandLineRunner {
                             "None",
                             "None",
                             "Flyo",
-                            "On time"
+                            "On time",
+                            "+919844556677"
                     )
             );
             bookingRepository.saveAll(seedBookings);

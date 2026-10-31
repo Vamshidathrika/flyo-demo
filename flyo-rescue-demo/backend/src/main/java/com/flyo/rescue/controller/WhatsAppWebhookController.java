@@ -138,6 +138,7 @@ public class WhatsAppWebhookController {
         try {
             String reply;
             if (passengerRescueWorkflowService.isPassengerMessage(sender, message, buttonId)) {
+                chatLogService.logInbound(sender, message != null ? message : (buttonId != null ? "[" + buttonId + "]" : ""));
                 reply = passengerRescueWorkflowService.processPassengerInbound(sender, message, buttonId);
             } else {
                 reply = commandService.processInboundMessage(sender, message, buttonId);
@@ -238,6 +239,7 @@ public class WhatsAppWebhookController {
 
                                     // Dispatch to passenger workflow or operator command processor
                                     if (passengerRescueWorkflowService.isPassengerMessage(from, textBody, buttonId)) {
+                                        chatLogService.logInbound(from, textBody != null ? textBody : (buttonId != null ? "[" + buttonId + "]" : ""));
                                         passengerRescueWorkflowService.processPassengerInbound(from, textBody, buttonId);
                                     } else {
                                         commandService.processInboundMessage(from, textBody, buttonId);

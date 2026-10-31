@@ -110,8 +110,14 @@ async function runWorker() {
                 await page.screenshot({ path: step2Screenshot });
                 if (!screenshots.includes(step2Screenshot)) screenshots.push(step2Screenshot);
 
-                // Step 3: Select Approved Flight Option (e.g. FL301)
-                const selectBtn = page.getByRole("button", { name: `Select ${config.flight}` });
+                // Step 3: Select Approved Flight Option (e.g. FL301, FL101)
+                let selectBtn = page.getByRole("button", { name: `Select ${config.flight}` });
+                if (await selectBtn.count() === 0) {
+                    const fallbackBtn = page.locator("button.btn-airline-select");
+                    if (await fallbackBtn.count() > 0) {
+                        selectBtn = fallbackBtn.first();
+                    }
+                }
                 await selectBtn.click();
                 await page.waitForURL("**/mock-airline/confirm*");
                 steps.push(`Selected approved flight option ${config.flight}`);

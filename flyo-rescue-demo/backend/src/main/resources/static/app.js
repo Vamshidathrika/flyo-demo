@@ -70,6 +70,20 @@ async function fetchBookings() {
     }
 }
 
+async function fetchCase(caseId) {
+    if (!caseId) return;
+    try {
+        const res = await fetch(`/api/cases/${encodeURIComponent(caseId)}`);
+        if (res.ok) {
+            const data = await res.json();
+            currentActiveCase = data;
+            renderCase(data, true);
+        }
+    } catch (err) {
+        console.error("Error fetching case:", err);
+    }
+}
+
 async function fetchActiveCases(silent = false) {
     try {
         const response = await fetch("/api/cases");
@@ -664,10 +678,10 @@ function WhatsAppMessageBubble({ msg, index }) {
         interactiveButtonsHtml = `
             <div class="passenger-wa-buttons-tray" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.6rem;">
                 <button onclick="submitPassengerChatInput(null, 'SELECT_OPTION_O1')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
-                    ✈️ Select Option 1 (FL201 &middot; ₹0)
+                    ✈️ Select Option 1 (Recommended)
                 </button>
                 <button onclick="submitPassengerChatInput(null, 'SELECT_OPTION_O2')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
-                    ✈️ Select Option 2 (FL301 &middot; +₹4,200)
+                    ✈️ Select Option 2
                 </button>
                 <button onclick="submitPassengerChatInput(null, 'ABANDON_RESCUE')" class="wa-action-btn" style="padding:0.45rem; background:#f8fafc; color:#64748b; font-size:0.75rem; font-weight:600; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">
                     ❌ ABANDON RESCUE
@@ -682,7 +696,7 @@ function WhatsAppMessageBubble({ msg, index }) {
         interactiveButtonsHtml = `
             <div class="passenger-wa-buttons-tray" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.6rem;">
                 ${otpCode ? `
-                    <button onclick="submitPassengerChatInput('${otpCode}', null)" class="wa-action-btn" style="padding:0.55rem; background:#16a34a; color:white; font-size:0.82rem; font-weight:800; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 4px rgba(22,163,74,0.2);">
+                    <button onclick="submitPassengerChatInput('${otpCode}', 'VERIFY_PASSENGER_OTP_${otpCode}')" class="wa-action-btn" style="padding:0.55rem; background:#16a34a; color:white; font-size:0.82rem; font-weight:800; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 4px rgba(22,163,74,0.2);">
                         🔐 Confirm & Rebook with OTP (${otpCode})
                     </button>
                 ` : ''}
@@ -820,6 +834,19 @@ async function submitPassengerChatInput(customText, customButtonId) {
     const caseId = targetCase ? targetCase.id : "C1";
     const phone = targetCase && targetCase.passengerPhone ? targetCase.passengerPhone : "+919876543210";
 
+    let resolvedButtonId = customButtonId;
+    if (resolvedButtonId) {
+        if (resolvedButtonId.startsWith("SELECT_OPTION_") && !resolvedButtonId.includes(caseId)) {
+            const optPart = resolvedButtonId.substring("SELECT_OPTION_".length());
+            resolvedButtonId = `SELECT_OPTION_${caseId}_${optPart}`;
+        } else if (resolvedButtonId.startsWith("VERIFY_PASSENGER_OTP_") && !resolvedButtonId.includes(caseId)) {
+            const codePart = resolvedButtonId.substring("VERIFY_PASSENGER_OTP_".length());
+            resolvedButtonId = `VERIFY_PASSENGER_OTP_${caseId}_${codePart}`;
+        } else if (!resolvedButtonId.includes(caseId)) {
+            resolvedButtonId = `${resolvedButtonId}_${caseId}`;
+        }
+    }
+
     try {
         const response = await fetch("/api/whatsapp/simulate-incoming", {
             method: "POST",
@@ -827,7 +854,7 @@ async function submitPassengerChatInput(customText, customButtonId) {
             body: JSON.stringify({
                 sender: phone,
                 message: text || null,
-                buttonId: customButtonId || null
+                buttonId: resolvedButtonId || null
             })
         });
 
@@ -846,12 +873,9 @@ async function submitPassengerChatInput(customText, customButtonId) {
         await fetchOptions(caseId);
         await fetchAudit(caseId);
         await fetchBookings();
+        await fetchWhatsAppOperatorChat();
     } catch (e) {
         console.error("Error sending passenger WhatsApp command:", e);
-    }
-}
-    } catch (e) {
-        console.error("Error sending passenger message:", e);
     }
 }
 
@@ -1467,6 +1491,7 @@ function renderWhatsAppOperatorChat(messages) {
     for (const msg of messages) {
         const isInbound = msg.direction === "INBOUND";
         const msgClass = isInbound ? "wa-msg-inbound" : "wa-msg-outbound";
+        const msgPhone = isInbound ? msg.sender : msg.recipient;
 
         // Format bold markdown (*text*)
         let formattedText = escapeHtml(msg.text || "")
@@ -1478,11 +1503,11 @@ function renderWhatsAppOperatorChat(messages) {
         if (msg.buttons && msg.buttons.length > 0) {
             buttonsHtml = `<div class="wa-button-tray">`;
             for (const btn of msg.buttons) {
-                const isDanger = btn.id && (btn.id.includes("REJECT") || btn.id.includes("BREAK"));
+                const isDanger = btn.id && (btn.id.includes("REJECT") || btn.id.includes("BREAK") || btn.id.includes("ABANDON"));
                 const btnClass = isDanger ? "wa-action-btn btn-danger-wa" : "wa-action-btn";
 
                 buttonsHtml += `
-                    <button class="${btnClass}" onclick="handleWhatsAppButtonClick('${escapeHtml(btn.id)}')">
+                    <button class="${btnClass}" onclick="handleWhatsAppButtonClick('${escapeHtml(btn.id)}', '${escapeHtml(msgPhone || '')}')">
                         ${escapeHtml(btn.title || btn.id)}
                     </button>
                 `;
@@ -1495,6 +1520,10 @@ function renderWhatsAppOperatorChat(messages) {
 
     feed.innerHTML = html;
     feed.scrollTop = feed.scrollHeight;
+}
+
+function handleWhatsAppButtonClick(buttonId, senderPhone = null) {
+    sendWhatsAppOperatorCommand(null, buttonId, senderPhone);
 }
 
 function detectOtpInChat(messages) {
@@ -1510,14 +1539,15 @@ function detectOtpInChat(messages) {
     }
 }
 
-async function sendWhatsAppOperatorCommand(command, buttonId = null) {
+async function sendWhatsAppOperatorCommand(command, buttonId = null, senderPhone = null) {
     const input = document.getElementById("wa-chat-input");
     const sendBtn = document.getElementById("wa-send-btn");
     if (sendBtn) sendBtn.disabled = true;
 
     try {
+        const phone = senderPhone || (currentActiveCase && currentActiveCase.passengerPhone ? currentActiveCase.passengerPhone : "919876543210");
         const payload = {
-            sender: "919876543210",
+            sender: phone,
             message: command,
             buttonId: buttonId
         };
@@ -1547,6 +1577,12 @@ async function sendWhatsAppOperatorCommand(command, buttonId = null) {
         // Immediate cascade sync
         await fetchWhatsAppOperatorChat();
         await fetchActiveCases(true);
+        if (currentActiveCase && currentActiveCase.id) {
+            await fetchCase(currentActiveCase.id);
+            await fetchMessages(currentActiveCase.id);
+            await fetchOptions(currentActiveCase.id);
+            await fetchAudit(currentActiveCase.id);
+        }
         await fetchBookings();
         await fetchOtpStatus();
     } catch (e) {
