@@ -223,8 +223,10 @@ public class PassengerWhatsAppMessagingService {
                 • Arrival: %s
                 • Airline PNR: *%s*
                 • E-Ticket Status: *ISSUED & VALIDATED*
+                • E-Ticket / Itinerary: http://localhost:8080/mock-airline/itinerary?pnr=%s
                 • Additional Payment: *%s*
                 • Baggage Guidance: Checked luggage automatically transfers. Show this confirmed PNR at check-in / gate.
+                • Boarding Pass: Available upon carrier online check-in (opens 24h prior to departure).
 
                 Thank you for choosing Flyo.
                 """,
@@ -233,6 +235,7 @@ public class PassengerWhatsAppMessagingService {
                 route,
                 dep,
                 arr,
+                verifiedPnr,
                 verifiedPnr,
                 fareText
         );

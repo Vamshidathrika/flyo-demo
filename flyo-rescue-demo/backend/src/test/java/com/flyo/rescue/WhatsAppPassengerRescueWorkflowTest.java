@@ -3,6 +3,7 @@ package com.flyo.rescue;
 import com.flyo.rescue.controller.MockAirlineController;
 import com.flyo.rescue.dto.RebookResultDto;
 import com.flyo.rescue.model.Booking;
+import com.flyo.rescue.model.RebookOption;
 import com.flyo.rescue.model.RescueCase;
 import com.flyo.rescue.model.VirtualCard;
 import com.flyo.rescue.repository.AuditEventRepository;
@@ -62,6 +63,21 @@ public class WhatsAppPassengerRescueWorkflowTest {
 
     @Autowired
     private PassengerOtpService passengerOtpService;
+
+    @Autowired
+    private PassengerConfirmationService confirmationService;
+
+    @Autowired
+    private PassengerOptionSelectionService optionSelectionService;
+
+    @Autowired
+    private RebookingOrchestrationService rebookingOrchestrationService;
+
+    @Autowired
+    private com.flyo.rescue.repository.RebookOptionRepository optionRepository;
+
+    @Autowired
+    private com.flyo.rescue.repository.PaymentTransactionRepository paymentTransactionRepository;
 
     @Autowired
     private com.flyo.rescue.repository.VirtualCardRepository virtualCardRepository;
@@ -395,6 +411,162 @@ public class WhatsAppPassengerRescueWorkflowTest {
 
         boolean approvedExcessive = paymentSettlementService.verifyAgencySpendingLimit("C1", 75000);
         assertFalse(approvedExcessive, "Fare difference exceeding ₹50,000 policy limit must be rejected");
+    }
+
+    @Test
+    @DisplayName("Scenario J: Agency Spending Limit Exceeded routes to MANUAL_APPROVAL_PENDING without marking payment failed")
+    void testScenarioJ_AgencySpendingLimitExceededRoutesToManualApprovalPending() {
+        cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "RESCUE", null);
+
+        RebookOption o2 = optionRepository.findById("O2").orElseThrow();
+        int originalCost = o2.getExtraCost();
+        try {
+            o2.setExtraCost(75000);
+            optionRepository.save(o2);
+
+            String previewReply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, null, "SELECT_OPTION_C1_O2");
+            String otp = extractOtp(previewReply);
+            assertNotNull(otp);
+
+            confirmationService.confirmAndVerify("C1", ANANYA_PHONE, otp);
+
+            RescueCase c = rebookingOrchestrationService.executeRebookingWorkflow("C1", ANANYA_PHONE);
+            assertEquals(CaseStateMachineService.STATE_MANUAL_APPROVAL_PENDING, c.getState());
+            assertNotNull(c.getError());
+            assertTrue(c.getError().contains("limit exceeded"));
+        } finally {
+            o2.setExtraCost(originalCost);
+            optionRepository.save(o2);
+        }
+    }
+
+    @Test
+    @DisplayName("Scenario K: Confirmed failure voids active card authorization")
+    void testScenarioK_ConfirmedFailureVoidsCardAuthorization() {
+        cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "RESCUE", null);
+        String previewReply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, null, "SELECT_OPTION_C1_O2");
+        String otp = extractOtp(previewReply);
+        assertNotNull(otp);
+
+        when(rebookService.executePlaywrightRebook(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+                .thenReturn(new RebookResultDto(false, "C1", "O2", "FL301", null, "Airline inventory locked by concurrent session", 3, java.util.List.of(), java.util.List.of()));
+
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, otp, null);
+
+        RescueCase failedCase = rescueCaseRepository.findById("C1").orElseThrow();
+        assertEquals(CaseStateMachineService.STATE_BOOKING_FAILED, failedCase.getState());
+
+        Optional<VirtualCard> activeCard = paymentSettlementService.getActiveCardForCase("C1");
+        assertTrue(activeCard.isEmpty());
+
+        assertTrue(paymentTransactionRepository.findByCaseIdOrderByTimestampAsc("C1").stream()
+                .anyMatch(t -> "VOIDED".equalsIgnoreCase(t.getStatus())));
+    }
+
+    @Test
+    @DisplayName("Scenario L: Unknown timeout triggers PAYMENT_RECONCILIATION_REQUIRED and host inquiry")
+    void testScenarioL_TimeoutOutcomeTriggersPaymentReconciliationAndResolvesViaHostInquiry() {
+        cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "RESCUE", null);
+        String previewReply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, null, "SELECT_OPTION_C1_O2");
+        String otp = extractOtp(previewReply);
+        assertNotNull(otp);
+
+        when(rebookService.executePlaywrightRebook(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+                .thenReturn(new RebookResultDto(false, "C1", "O2", "FL301", null, "504 Gateway Timeout while processing payment with carrier", 3, java.util.List.of(), java.util.List.of()));
+
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, otp, null);
+
+        RescueCase failedCase = rescueCaseRepository.findById("C1").orElseThrow();
+        assertEquals(CaseStateMachineService.STATE_BOOKING_FAILED, failedCase.getState());
+        assertTrue(failedCase.getError().contains("timed out"));
+
+        assertTrue(auditEventRepository.findAll().stream().anyMatch(e ->
+                "C1".equals(e.getCaseId()) && "BOOKING_RECONCILED_FAILED".equals(e.getEvent())));
+    }
+
+    @Test
+    @DisplayName("Scenario M: Involuntary disruption waiver (DGCA CAR / Rule 240) waives fare to ₹0")
+    void testScenarioM_CarrierInvoluntaryDisruptionWaiverSetsExtraFareToZero() {
+        cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
+        RebookOption o2 = optionRepository.findById("O2").orElseThrow();
+        int originalCost = o2.getExtraCost();
+        try {
+            boolean waived = optionSelectionService.applyInvoluntaryDisruptionWaiver("C1", "O2");
+            assertTrue(waived);
+
+            RebookOption updated = optionRepository.findById("O2").orElseThrow();
+            assertEquals(0, updated.getExtraCost());
+
+            assertTrue(auditEventRepository.findAll().stream().anyMatch(e ->
+                    "C1".equals(e.getCaseId()) && "INVOLUNTARY_DISRUPTION_WAIVER_APPLIED".equals(e.getEvent())));
+        } finally {
+            o2.setExtraCost(originalCost);
+            optionRepository.save(o2);
+        }
+    }
+
+    @Test
+    @DisplayName("Scenario N: Option expiration triggers closed-loop auto-refresh without terminal dead-end")
+    void testScenarioN_OptionExpiredClosedLoopAutoRefresh() {
+        cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "RESCUE", null);
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "OPTION O1", null);
+
+        optionSelectionService.handleOptionExpired("C1");
+
+        RescueCase c = rescueCaseRepository.findById("C1").orElseThrow();
+        assertEquals(CaseStateMachineService.STATE_AWAITING_OPTION_SELECTION, c.getState());
+    }
+
+    @Test
+    @DisplayName("Scenario O: Closed-loop OTP retry allows recovery on second attempt without locking out")
+    void testScenarioO_ClosedLoopOtpRetryAllowsRecoveryOnSecondAttempt() {
+        cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
+        passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "RESCUE", null);
+        String previewReply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "OPTION O1", null);
+        String realOtp = extractOtp(previewReply);
+        assertNotNull(realOtp);
+
+        String reply1 = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, "000000", null);
+        assertTrue(reply1.contains("Incorrect") || reply1.contains("Invalid") || reply1.contains("verification code"));
+
+        RescueCase afterFail = rescueCaseRepository.findById("C1").orElseThrow();
+        assertEquals(CaseStateMachineService.STATE_AWAITING_PASSENGER_OTP, afterFail.getState());
+
+        String reply2 = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, realOtp, null);
+        assertTrue(reply2.contains("Your flight rescue is confirmed!"));
+
+        RescueCase afterSuccess = rescueCaseRepository.findById("C1").orElseThrow();
+        assertEquals("DONE", afterSuccess.getState());
+    }
+
+    @Test
+    @DisplayName("Scenario P: End-to-end dynamic recovery workflow for non-hardcoded passenger (Vikram Malhotra)")
+    void testScenarioP_DynamicMultiPassengerJourneyVikramMalhotra() {
+        Booking b2 = new Booking("B-VIK-2", "Vikram Malhotra", "PNR-VIK-2", "DEL → BLR", "6E-204",
+                "Tonight 22:00", "None", "None", "IndiGo", "Confirmed", VIKRAM_PHONE);
+        bookingRepository.save(b2);
+
+        RescueCase caseVik = cancellationNotificationService.handleFlightCancellation("B-VIK-2", "Flight Cancelled", "IndiGo Radar");
+        assertNotNull(caseVik);
+        assertEquals(VIKRAM_PHONE, caseVik.getPassengerPhone());
+
+        String replyRescue = passengerWorkflow.processPassengerInbound(VIKRAM_PHONE, "RESCUE MY TRIP", null);
+        assertTrue(replyRescue.contains("alternative flights"));
+
+        String replySelect = passengerWorkflow.processPassengerInbound(VIKRAM_PHONE, "OPTION O1", null);
+        String otp = extractOtp(replySelect);
+        assertNotNull(otp);
+
+        String replyConfirm = passengerWorkflow.processPassengerInbound(VIKRAM_PHONE, otp, null);
+        assertTrue(replyConfirm.contains("Your flight rescue is confirmed!"));
+
+        RescueCase doneCase = rescueCaseRepository.findById(caseVik.getId()).orElseThrow();
+        assertEquals("DONE", doneCase.getState());
+        assertEquals("Vikram Malhotra", doneCase.getPassengerName());
     }
 
     private String extractOtp(String message) {

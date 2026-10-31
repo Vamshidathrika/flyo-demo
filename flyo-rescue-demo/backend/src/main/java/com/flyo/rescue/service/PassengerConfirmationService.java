@@ -117,6 +117,13 @@ public class PassengerConfirmationService {
                         "Flyo Security Engine",
                         "Passenger OTP expired before entry"
                 );
+                // Closed-loop recovery: regenerate challenge and prompt retry
+                stateMachineService.transition(
+                        rescueCase,
+                        CaseStateMachineService.STATE_AWAITING_PASSENGER_OTP,
+                        "Flyo Security Engine",
+                        "Regenerated fresh OTP challenge for passenger retry"
+                );
                 rescueCaseRepository.save(rescueCase);
             } else if ("LOCKED_OUT".equalsIgnoreCase(result.reason())) {
                 if (!CaseStateMachineService.STATE_ESCALATED.equals(rescueCase.getState())
@@ -129,6 +136,12 @@ public class PassengerConfirmationService {
                     );
                     stateMachineService.transition(
                             rescueCase,
+                            CaseStateMachineService.STATE_MANUAL_INTERVENTION_REQUIRED,
+                            "Flyo Security Engine",
+                            "Flagged for human travel desk verification"
+                    );
+                    stateMachineService.transition(
+                            rescueCase,
                             CaseStateMachineService.STATE_ESCALATED,
                             "Flyo Security Engine",
                             "Case escalated to operations desk due to OTP security lockout"
@@ -136,13 +149,19 @@ public class PassengerConfirmationService {
                     rescueCaseRepository.save(rescueCase);
                 }
             } else if ("INVALID_CODE".equalsIgnoreCase(result.reason())) {
-                if (!CaseStateMachineService.STATE_OTP_FAILED.equals(rescueCase.getState())
-                        && !CaseStateMachineService.STATE_ESCALATED.equals(rescueCase.getState())) {
+                if (!CaseStateMachineService.STATE_ESCALATED.equals(rescueCase.getState())) {
                     stateMachineService.transition(
                             rescueCase,
                             CaseStateMachineService.STATE_OTP_FAILED,
                             "Flyo Security Engine",
                             "Invalid passenger OTP attempt recorded (" + result.reason() + ")"
+                    );
+                    // Closed-loop retry: remain in AWAITING_PASSENGER_OTP for next attempt
+                    stateMachineService.transition(
+                            rescueCase,
+                            CaseStateMachineService.STATE_AWAITING_PASSENGER_OTP,
+                            "Flyo Security Engine",
+                            "Awaiting passenger retry submission"
                     );
                     rescueCaseRepository.save(rescueCase);
                 }
@@ -152,6 +171,19 @@ public class PassengerConfirmationService {
                         CaseStateMachineService.STATE_FARE_CHANGED,
                         "Flyo Security Engine",
                         "Fare difference changed. Requiring new passenger review and confirmation"
+                );
+                // Closed-loop recovery: revalidate option with new fare and request fresh consent
+                stateMachineService.transition(
+                        rescueCase,
+                        CaseStateMachineService.STATE_REVALIDATING_OPTION,
+                        "Flyo Provider Bridge",
+                        "Recalculating complete cost including taxes, exchange fees, and surcharges"
+                );
+                stateMachineService.transition(
+                        rescueCase,
+                        CaseStateMachineService.STATE_AWAITING_PASSENGER_CONFIRMATION,
+                        "Flyo Confirmation Engine",
+                        "Presenting revised itinerary quote to passenger for fresh OTP acceptance"
                 );
                 rescueCaseRepository.save(rescueCase);
             }

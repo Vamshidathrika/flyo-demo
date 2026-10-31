@@ -7,7 +7,7 @@ Flyo Rescue Agent provides an autonomous, passenger-driven disruption recovery p
 1. `[ RESCUE MY TRIP ]`
 2. `[ ABANDON RESCUE ]`
 
-The entire recovery process—itinerary connection risk analysis, alternative flight discovery, deterministic option ranking, passenger selection, live availability and fare revalidation, mandatory confirmation OTP verification, explicit branching between zero-fare and positive-fare payment paths, corporate virtual card authorization, carrier rebooking, and authoritative PNR and e-ticket verification—runs autonomously in real time.
+The entire recovery process—itinerary connection risk analysis, alternative flight discovery, deterministic option ranking, passenger selection, live availability and fare revalidation, mandatory confirmation OTP verification, explicit branching between zero-fare and positive-fare payment paths, corporate virtual card preparation (`PAYMENT_INSTRUMENT_READY`), carrier rebooking with 3-outcome reconciliation (Confirmed Success, Confirmed Failure, Unknown Timeout), payment authorization and capture, and authoritative PNR and e-ticket verification—runs autonomously in real time.
 
 ---
 
@@ -32,17 +32,23 @@ flowchart TD
     I --> J["REVALIDATING_OPTION<br/>Revalidate Live Carrier Seat Availability & Fare Rules<br/>Recalculate Downstream Feasibility"]
     
     J --> K{"Availability or<br/>Fare Changed?"}
-    K -->|Expired| L["OPTION_EXPIRED &rarr; Refresh Options"]
-    K -->|Fare Changed| M["FARE_CHANGED &rarr; Display Updated Cost<br/>Require Passenger Re-Acceptance"]
+    K -->|Expired| L["OPTION_EXPIRED &rarr; REFRESHING_ALTERNATIVES<br/>Closed-Loop Inventory Refresh & Return to Options"]
+    K -->|Fare Changed| M["FARE_CHANGED &rarr; Display Updated Cost<br/>Require Fresh Passenger Consent & New OTP"]
     K -->|Confirmed Unchanged| N["Present Final Itinerary Preview & Exact Cost<br/>Generate Single-Use Confirmation OTP<br/>(Bound to Case + Phone + Option + Fare + Currency)"]
+    
+    L --> E
+    M --> J
     
     N --> O["AWAITING_PASSENGER_OTP<br/>Passenger Enters 6-Digit Consent Code"]
     
     O --> P{"Verify Passenger OTP"}
-    P -->|Invalid Code &lt; 5 Attempts| Q["OTP_FAILED<br/>Decrement Attempt Counter & Prompt Retry"]
-    P -->|Expired (> 10 min)| R["OTP_EXPIRED &rarr; Regenerate Challenge"]
+    P -->|Invalid Code &lt; 5 Attempts| Q["OTP_FAILED &rarr; AWAITING_PASSENGER_OTP<br/>Decrement Attempt Counter & Prompt Retry"]
+    P -->|Expired &gt; 10 min| R["OTP_EXPIRED &rarr; AWAITING_PASSENGER_OTP<br/>Regenerate Fresh Challenge & Prompt Retry"]
     P -->|5 Failed Attempts| S["LOCKED_OUT &rarr; ESCALATED<br/>30-Minute Security Lockout<br/>Alert Operations Desk"]
     P -->|Valid OTP| T["PASSENGER_VERIFIED<br/>Passenger Consent Authoritatively Locked"]
+    
+    Q --> O
+    R --> O
     
     T --> U{"Check Additional Fare<br/>Difference"}
     
@@ -50,30 +56,40 @@ flowchart TD
     U -->|₹0 Additional Fare| V["PATH A: NO PAYMENT REQUIRED<br/>• Skip VCC Issuance Entirely<br/>• Skip Payment Gateway Processing<br/>• REBOOKING Directly Dispatched"]
     
     %% PATH B: Positive Additional Fare
-    U -->|Positive Fare (> ₹0)| W["PATH B: PAYMENT REQUIRED<br/>VERIFYING_AGENCY_APPROVAL<br/>Check Corporate Policy & Agency Spending Limits"]
+    U -->|Positive Fare Difference| W["PATH B: PAYMENT REQUIRED<br/>VERIFYING_AGENCY_APPROVAL<br/>Check Corporate Policy & Agency Spending Limits"]
     
-    W --> X{"Within Agency<br/>Limit (₹50k)?"}
-    X -->|Exceeded / Denied| Y["PAYMENT_FAILED &rarr; ESCALATED<br/>Agency Approval Required"]
-    X -->|Approved| Z["PAYMENT_AUTH_PENDING<br/>Issue Single-Use Corporate Virtual Card (VCC)<br/>Locked to Case, Option & Approved Fare"]
+    W --> X{"Within Agency<br/>Limit - ₹50k or ₹100k?"}
+    X -->|Exceeded| Y["AGENCY_APPROVAL_REQUIRED &rarr; MANUAL_APPROVAL_PENDING<br/>Agency Policy Exception Review - Not a Payment Failure"]
+    X -->|Approved| Z["PAYMENT_INSTRUMENT_READY<br/>Issue Single-Use Corporate Virtual Card - VCC<br/>Locked to Case, Option & Approved Fare"]
     
-    Z --> AA["PAYMENT_VERIFIED<br/>Treasury Settlement Instrument Armed"]
-    AA --> AB["REBOOKING<br/>Dispatch Rebooking Subprocess with VCC"]
-    
+    Z --> AB["REBOOKING<br/>Dispatch Rebooking Subprocess with VCC Credentials"]
     V --> AC["AUTHORIZED REBOOKING<br/>Airline NDC API / Playwright Partner Portal Engine"]
     AB --> AC
     
     AC --> AD{"Rebooking Provider<br/>Outcome"}
-    AD -->|Failed / Unreachable| AE{"Payment Authorized?"}
-    AE -->|Yes (Path B)| AF["PAYMENT_RECONCILIATION_REQUIRED<br/>Flag Card for Treasury Reversal"]
-    AE -->|No (Path A)| AG["BOOKING_FAILED &rarr; ESCALATED"]
-    AF --> AG
     
-    AD -->|Success| AH["VERIFYING_BOOKING<br/>Independently Verify PNR on Airline Host System"]
-    AH --> AI["VERIFYING_TICKET<br/>Confirm Electronic Ticket (e-Ticket) Issuance"]
+    %% Outcome A: Confirmed Success
+    AD -->|Outcome A: Confirmed Success| AH["VERIFYING_BOOKING<br/>Independently Verify PNR on Airline Host System"]
+    AH --> AI["VERIFYING_TICKET<br/>Confirm Electronic Ticket - e-Ticket Issuance"]
+    AI --> AP{"Path B Positive Fare?"}
+    AP -->|Yes| AQ["PAYMENT_AUTH_PENDING &rarr; PAYMENT_AUTHORIZED &rarr; PAYMENT_CAPTURED<br/>Record Settlement with Card Issuer"]
+    AP -->|No - Path A| AR["DONE - RESCUED<br/>Update Core Booking Record to 'Rescued'"]
+    AQ --> AR
     
-    AI --> AJ["DONE (RESCUED)<br/>Record Financial Settlement (Path B only)<br/>Update Core Booking Record to 'Rescued'"]
+    AR --> AK["FINAL WHATSAPP CONFIRMATION<br/>Verified Itinerary + Confirmed PNR<br/>e-Ticket Status (ISSUED & VALIDATED)<br/>Itinerary Link + Baggage Transfer Guidance<br/>(Boarding Pass Opens at Carrier Check-In 24h Prior)"]
     
-    AJ --> AK["FINAL WHATSAPP CONFIRMATION<br/>Verified Itinerary + Confirmed PNR<br/>e-Ticket Status + Baggage Transfer Guidance<br/>Direct Boarding Pass URL"]
+    %% Outcome B: Confirmed Failure
+    AD -->|Outcome B: Definitive Failure| BF["Definitive Booking Failure<br/>(e.g., Seat Sold / Inventory Locked)"]
+    BF --> BG{"Path B VCC Issued?"}
+    BG -->|Yes| BH["Void Uncaptured VCC Authorization<br/>or Refund Captured Payment"]
+    BG -->|No| BI["BOOKING_FAILED &rarr; ESCALATED<br/>Alert Operations Console"]
+    BH --> BI
+    
+    %% Outcome C: Unknown / Timeout
+    AD -->|Outcome C: Unknown Outcome / Timeout| TO["PAYMENT_RECONCILIATION_REQUIRED &rarr; RECONCILING<br/>Query Carrier Host using Idempotency Key (caseId)"]
+    TO --> TR{"Carrier Host<br/>Inquiry Result"}
+    TR -->|Booking Exists| AH
+    TR -->|No Booking Found| BH
 ```
 
 ---
@@ -137,30 +153,44 @@ sequenceDiagram
             Engine->>Rebook: Dispatch zero-fare rebooking to booking provider
         else Path B: Positive Additional Fare (> ₹0)
             Engine->>SM: Transition: PASSENGER_VERIFIED -> VERIFYING_AGENCY_APPROVAL
-            Engine->>Treasury: Check agency policy & spending limit (₹50,000 threshold)
+            Engine->>Treasury: Check agency policy & spending limit (₹50k/₹100k threshold)
             Treasury-->>Engine: Spending approved
-            Engine->>SM: Transition: VERIFYING_AGENCY_APPROVAL -> PAYMENT_AUTH_PENDING
-            Engine->>Treasury: Issue single-use Virtual Corporate Card (VCC)
-            Treasury-->>Engine: VCC issued & authorized (Card locked to approved amount)
-            Engine->>SM: Transition: PAYMENT_AUTH_PENDING -> PAYMENT_VERIFIED -> REBOOKING
+            Engine->>Treasury: Prepare single-use Virtual Corporate Card (VCC)
+            Treasury-->>Engine: VCC armed & locked to approved amount
+            Engine->>SM: Transition: VERIFYING_AGENCY_APPROVAL -> PAYMENT_INSTRUMENT_READY -> REBOOKING
             Engine->>Rebook: Dispatch payment-authorized rebooking with VCC credentials
         end
 
-        Rebook-->>Engine: Portal rebooking executed. Confirmed PNR returned
-        Engine->>SM: Transition: REBOOKING -> VERIFYING_BOOKING
-        Engine->>Provider: Step 10: Authoritatively verify PNR on carrier host
-        Provider-->>Engine: Booking confirmed
-        Engine->>SM: Transition: VERIFYING_BOOKING -> VERIFYING_TICKET
-        Engine->>Provider: Confirm e-ticket issuance and coupon coupons
-        Provider-->>Engine: Electronic ticket ISSUED
+        Rebook-->>Engine: Provider execution result returned
 
-        opt If Path B (> ₹0 fare)
-            Engine->>Treasury: Record financial settlement on VCC
+        alt Outcome A: Confirmed Success
+            Engine->>SM: Transition: REBOOKING -> VERIFYING_BOOKING
+            Engine->>Provider: Step 10: Authoritatively verify PNR on carrier host
+            Provider-->>Engine: Booking confirmed (New PNR verified)
+            Engine->>SM: Transition: VERIFYING_BOOKING -> VERIFYING_TICKET
+            Engine->>Provider: Confirm e-ticket issuance and coupon coupons
+            Provider-->>Engine: Electronic ticket ISSUED & VALIDATED
+            opt If Path B (> ₹0 fare)
+                Engine->>SM: Transition: PAYMENT_AUTH_PENDING -> PAYMENT_AUTHORIZED -> PAYMENT_CAPTURED
+                Engine->>Treasury: Capture settled payment with card issuer
+            end
+            Engine->>SM: Transition: VERIFYING_TICKET -> DONE (RESCUED)
+            Engine->>Meta: Step 11: Dispatches Final WhatsApp Confirmation (PNR, Ticket, Baggage)
+            Meta->>Pax: Verified e-ticket, itinerary link, and baggage guidance delivered
+        else Outcome B: Confirmed Failure
+            Engine->>Treasury: Void uncaptured VCC authorization / refund captured payment
+            Engine->>SM: Transition: REBOOKING -> BOOKING_FAILED
+            Engine->>Meta: Action Notice: Rebooking failed, escalated to travel desk
+        else Outcome C: Unknown / Timeout
+            Engine->>SM: Transition: REBOOKING -> PAYMENT_RECONCILIATION_REQUIRED -> RECONCILING
+            Engine->>Provider: Query carrier host using idempotency key (caseId)
+            alt Carrier confirms booking created
+                Engine->>SM: Transition: RECONCILING -> VERIFYING_BOOKING -> DONE
+            else Carrier confirms no booking created
+                Engine->>Treasury: Void VCC authorization
+                Engine->>SM: Transition: RECONCILING -> BOOKING_FAILED
+            end
         end
-
-        Engine->>SM: Transition: VERIFYING_TICKET -> DONE (RESCUED)
-        Engine->>Meta: Step 11: Dispatches Final WhatsApp Confirmation (PNR, Ticket, Baggage)
-        Meta->>Pax: Verified e-ticket, boarding pass link, and baggage guidance delivered
     end
 ```
 
@@ -182,25 +212,31 @@ sequenceDiagram
 11. `AWAITING_PASSENGER_OTP` — 6-digit consent OTP dispatched; awaiting passenger entry.
 12. `PASSENGER_VERIFIED` — Passenger OTP verified; consent authoritatively bound to case and amount.
 13. `VERIFYING_AGENCY_APPROVAL` — (Path B only) Verifying agency spending limits and policy compliance.
-14. `PAYMENT_AUTH_PENDING` — (Path B only) Authorizing single-use corporate virtual card (VCC).
-15. `PAYMENT_VERIFIED` — (Path B only) Corporate payment instrument successfully authorized.
-16. `REBOOKING` — Dispatched automated rebooking transaction to provider or browser automation.
-17. `VERIFYING_BOOKING` — Authoritatively verifying reservation on carrier host system.
-18. `VERIFYING_TICKET` — Verifying electronic ticket issuance and coupon validation.
-19. `DONE` — Autonomous recovery fully complete; confirmed e-ticket dispatched to passenger.
+14. `PAYMENT_INSTRUMENT_READY` — (Path B only) Single-use corporate virtual card (VCC) prepared and locked prior to booking.
+15. `REBOOKING` — Dispatched automated rebooking transaction to provider or browser automation.
+16. `PAYMENT_AUTH_PENDING` — (Path B only) Authorizing payment transaction with card issuer.
+17. `PAYMENT_AUTHORIZED` — (Path B only) Payment transaction authorized by issuer.
+18. `PAYMENT_CAPTURED` — (Path B only) Payment captured and settled with card issuer.
+19. `VERIFYING_BOOKING` — Authoritatively verifying reservation on carrier host system.
+20. `VERIFYING_TICKET` — Verifying electronic ticket issuance and coupon validation.
+21. `DONE` — Autonomous recovery fully complete; confirmed e-ticket dispatched to passenger.
 
-### Exceptional States
+### Exceptional States & Closed-Loop Recovery
 - `PASSENGER_DECLINED` — Passenger chose `[ ABANDON RESCUE ]`. Recovery closed without ticket cancellation.
 - `NO_OPTIONS_AVAILABLE` — No viable replacement flight candidates found within connection threshold.
 - `ITINERARY_FETCH_FAILED` — Unable to retrieve PNR or downstream itinerary from GDS.
-- `OPTION_EXPIRED` — Selected flight option seats sold out prior to confirmation.
-- `FARE_CHANGED` — Airline updated fare rules during selection; requires updated passenger approval.
-- `OTP_FAILED` — Invalid OTP submitted (decrements remaining attempts).
-- `OTP_EXPIRED` — Confirmation OTP expired (10-minute window elapsed).
-- `LOCKED_OUT` — 5 consecutive invalid OTP attempts reached; phone locked for 30 minutes.
-- `PAYMENT_FAILED` — Agency spending limit exceeded or corporate card issuer decline.
-- `PAYMENT_RECONCILIATION_REQUIRED` — Booking failed after payment authorized; flagged for treasury void/refund.
-- `BOOKING_FAILED` — Airline portal or GDS rejected rebooking transaction.
+- `OPTION_EXPIRED` — Selected flight option seats sold out prior to confirmation; transitions to `REFRESHING_ALTERNATIVES` &rarr; `SEARCHING_ALTERNATIVES` &rarr; `OPTIONS_READY` &rarr; `AWAITING_OPTION_SELECTION`.
+- `REFRESHING_ALTERNATIVES` — Live seat and fare refresh underway following option expiration.
+- `FARE_CHANGED` — Airline updated fare rules during selection; recalculates full cost and returns to `REVALIDATING_OPTION` &rarr; `AWAITING_PASSENGER_CONFIRMATION` for fresh passenger OTP consent.
+- `OTP_FAILED` — Invalid OTP submitted; transitions to `OTP_FAILED` then returns to `AWAITING_PASSENGER_OTP` for retry (< 5 attempts).
+- `OTP_EXPIRED` — Confirmation OTP expired (10-minute window elapsed); auto-regenerates challenge and returns to `AWAITING_PASSENGER_OTP`.
+- `LOCKED_OUT` — 5 consecutive invalid OTP attempts reached; phone locked for 30 minutes, routes to `MANUAL_INTERVENTION_REQUIRED` &rarr; `ESCALATED`.
+- `AGENCY_APPROVAL_REQUIRED` — Extra fare exceeds agency automated limit; routes to `MANUAL_APPROVAL_PENDING` for travel manager review (never classified as a payment failure).
+- `MANUAL_APPROVAL_PENDING` — Pending manual review in Travel Operations Portal.
+- `PAYMENT_FAILED` — Card issuer decline during authorization/capture.
+- `PAYMENT_RECONCILIATION_REQUIRED` — Timeout / unknown outcome on booking provider; routes to `RECONCILING`.
+- `RECONCILING` — Querying carrier host with idempotency key (`caseId`) to determine actual outcome before retrying or voiding card.
+- `BOOKING_FAILED` — Airline portal or GDS rejected rebooking transaction; card authorization voided.
 - `FAILED_ESCALATED` — Terminal failure requiring human intervention.
 - `MANUAL_INTERVENTION_REQUIRED` — Suspended for travel desk specialist review.
 - `ESCALATED` — Active case handed over to human travel operations console.
@@ -212,5 +248,7 @@ sequenceDiagram
 1. **Compulsory Passenger Consent OTP**: Every recovery journey (both zero-fare and positive-fare) requires verified passenger OTP confirmation.
 2. **Strict Zero-Fare Boundary**: If an alternative flight has `extraCost == 0`, the platform **never** generates a corporate virtual card or calls payment processors.
 3. **Payment Authentication Isolation**: Passenger WhatsApp chat only collects consent confirmation. Bank OTPs, 3D Secure credentials, CVVs, and raw card numbers are **never** requested or processed via WhatsApp.
-4. **Idempotent Ingress**: Duplicate flight radar alerts or repeated webhook callbacks are deduplicated using composite keys (`bookingId + flight + type`).
-5. **No Blind Retries on Payment Failure**: If an airline portal times out after a corporate card was charged, the case transitions to `PAYMENT_RECONCILIATION_REQUIRED` rather than repeatedly attempting duplicate charges.
+4. **Payment State Separation**: VCC issuance only reaches `PAYMENT_INSTRUMENT_READY`. Actual `PAYMENT_CAPTURED` must come from the payment provider/settlement.
+5. **Idempotent Ingress**: Duplicate flight radar alerts or repeated webhook callbacks are deduplicated using composite keys (`bookingId + flight + type`).
+6. **No Blind Retries on Unknown Outcome**: If an airline portal times out after a corporate card was prepared, the case transitions to `PAYMENT_RECONCILIATION_REQUIRED` and `RECONCILING` to query the host before any retry.
+7. **Agency Governance Separation**: Fare differences exceeding spending caps route to `AGENCY_APPROVAL_REQUIRED` and `MANUAL_APPROVAL_PENDING` rather than corrupting the payment failure logs.

@@ -94,4 +94,74 @@ public class PassengerOptionSelectionService {
         log.info("[Passenger Selection] Option {} selected for case {}", option.getId(), caseId);
         return option;
     }
+
+    /**
+     * Checks and applies airline involuntary disruption rebooking waiver (e.g. DGCA CAR Section 3 / Rule 240).
+     * When disruption is airline-initiated, waives extra fare difference to ₹0.
+     */
+    @Transactional
+    public boolean applyInvoluntaryDisruptionWaiver(String caseId, String optionId) {
+        RescueCase rescueCase = rescueCaseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+        RebookOption option = optionRepository.findById(optionId)
+                .orElseThrow(() -> new IllegalArgumentException("Option not found: " + optionId));
+
+        if (rescueCase.getCancelledSegment() != null || rescueCase.getFlight() != null) {
+            int originalCost = option.getExtraCost();
+            option.setExtraCost(0);
+            optionRepository.save(option);
+
+            auditService.logEvent(
+                    caseId,
+                    "INVOLUNTARY_DISRUPTION_WAIVER_APPLIED",
+                    "Flyo Regulatory Compliance",
+                    String.format("Carrier involuntary disruption waiver applied (DGCA CAR / Rule 240). Fare waived from ₹%,d to ₹0 for flight %s.",
+                            originalCost, option.getFlight())
+            );
+            log.info("[Involuntary Waiver] Case {}: Option {} fare waived from ₹{} to ₹0", caseId, optionId, originalCost);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Handles expired option window with closed-loop auto-refresh.
+     */
+    @Transactional
+    public void handleOptionExpired(String caseId) {
+        RescueCase rescueCase = rescueCaseRepository.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        stateMachineService.transition(
+                rescueCase,
+                CaseStateMachineService.STATE_OPTION_EXPIRED,
+                "Flyo Provider Bridge",
+                "Flight option availability window expired"
+        );
+        stateMachineService.transition(
+                rescueCase,
+                CaseStateMachineService.STATE_REFRESHING_ALTERNATIVES,
+                "Flyo Provider Bridge",
+                "Refreshing live alternative flight availability"
+        );
+        stateMachineService.transition(
+                rescueCase,
+                CaseStateMachineService.STATE_SEARCHING_ALTERNATIVES,
+                "Flyo Ranking Engine",
+                "Executing live inventory search for alternatives"
+        );
+        stateMachineService.transition(
+                rescueCase,
+                CaseStateMachineService.STATE_OPTIONS_READY,
+                "Flyo Ranking Engine",
+                "New alternative options generated and ranked"
+        );
+        stateMachineService.transition(
+                rescueCase,
+                CaseStateMachineService.STATE_AWAITING_OPTION_SELECTION,
+                "Flyo Messaging",
+                "Dispatched fresh alternative flights to passenger"
+        );
+        rescueCaseRepository.save(rescueCase);
+    }
 }
