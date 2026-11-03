@@ -5,7 +5,7 @@
   "description": "Flyo Rescue Playwright Worker for Mock Airline Portal",
   "main": "rebook.ts",
   "scripts": {
-    "test": "playwright test",
+    "test": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

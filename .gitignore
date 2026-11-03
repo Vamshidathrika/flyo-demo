@@ -8,3 +8,5 @@ node_modules/
 **/*.dump
 .DS_Store
 **/.DS_Store
+test-results/
+**/test-results/

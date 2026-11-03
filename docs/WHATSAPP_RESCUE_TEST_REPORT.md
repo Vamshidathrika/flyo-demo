@@ -3,8 +3,8 @@
 **Environment:** macOS (Local Engine)  
 **Database:** PostgreSQL (H2 Test Engine & Flyway v2 Schema)  
 **Test Suite:** JUnit 5 + Spring Boot Test + Mockito  
-**Playwright Agent:** TypeScript 5.6 + tsx v4.23 + Chromium Headless Shell 156.0  
-**Overall Status:** **90 / 90 Tests Passing (100% Clean Execution)**
+**Playwright Agent:** TypeScript 5.9 + tsx v4.23 + Chromium Headless Shell 156.0  
+**Overall Status:** **94 / 94 Tests Passing (100% Clean Execution)**
 
 ---
 
@@ -12,7 +12,7 @@
 
 | Test Class | Scenarios Covered | Tests Run | Failures | Errors | Result |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| `WhatsAppPassengerRescueWorkflowTest` | End-to-End Passenger WhatsApp Flow (Scenarios A–P) | 16 | 0 | 0 | **PASSED** |
+| `WhatsAppPassengerRescueWorkflowTest` | End-to-End Passenger WhatsApp Flow (Scenarios A–P + E2, J, K, L) | 20 | 0 | 0 | **PASSED** |
 | `WhatsAppCommandBotTest` | Operator Commands, Interactive Actions & Quick Replies | 8 | 0 | 0 | **PASSED** |
 | `FlightAlertTest` | Flight Disruption Radar Ingress & Deduplication | 2 | 0 | 0 | **PASSED** |
 | `ApprovalGateTest` | State Machine Transitions & Audit Trail | 1 | 0 | 0 | **PASSED** |
@@ -20,11 +20,11 @@
 | `FinancialAndBookingSafetyTest` | Financial safety, voiding, idempotency keys | 5 | 0 | 0 | **PASSED** |
 | `PaymentSettlementTest` | VCC lifecycle, ledger, spending caps | 4 | 0 | 0 | **PASSED** |
 | `Regression & Security Suite` | Migrations, OTP hashing, Rate limits, OpenApi docs | 53 | 0 | 0 | **PASSED** |
-| **Total** | **Full System Regression** | **90** | **0** | **0** | **100% PASSED** |
+| **Total** | **Full System Regression** | **94** | **0** | **0** | **100% PASSED** |
 
 ---
 
-## 2. Detailed Verification of WhatsApp Recovery Scenarios (16 Core Scenarios)
+## 2. Detailed Verification of WhatsApp Recovery Scenarios (Part 21 Verification Scenarios)
 
 ### Scenario A: Zero Additional Fare (₹0) Recovery
 - **Workflow:** Flight cancelled &rarr; Passenger alerts dispatched &rarr; `[ RESCUE MY TRIP ]` &rarr; Options displayed &rarr; Option 1 (₹0 fare difference) selected &rarr; Mandatory single-use passenger consent OTP verified.
@@ -52,11 +52,15 @@
 - **Outcome:** Attempt 1–4 decremented counter with `OTP_FAILED`. Attempt 5 triggered `LOCKED_OUT` &rarr; `ESCALATED`.
 - **Lockout Policy:** Phone locked for 30 minutes; subsequent submissions with valid OTP rejected.
 
+### Scenario E2: Security — OTP Expiry Window & Auto-Regeneration
+- **Verification:** OTP challenge elapsed beyond the 10-minute validity threshold.
+- **Outcome:** State transitions to `OTP_EXPIRED` &rarr; `AWAITING_PASSENGER_OTP`. Old code is invalidated; fresh challenge is generated; passenger retries with new code and successfully completes rebooking (`DONE`).
+
 ### Scenario F: Booking Failure & Payment Reconciliation
 - **Verification:** Mock airline rebooking provider fails after positive-fare VCC authorization.
 - **Outcome:** Case transitions to `PAYMENT_RECONCILIATION_REQUIRED` and `BOOKING_FAILED`. Transaction is not blindly retried; flagged for corporate treasury reversal.
 
-### Scenario G: Fare Change Detection
+### Scenario G: Fare Change Detection & Fresh Passenger Consent
 - **Verification:** OTP challenge armed for ₹4,200. Revalidation detects fare changed to ₹5,500.
 - **Outcome:** OTP verification returns `FARE_CHANGED`. Case transitions to `FARE_CHANGED`, preventing unauthorized charges until fresh passenger approval is granted.
 
@@ -68,13 +72,13 @@
 - **Verification:** Tested option with ₹75,000 fare difference against ₹50,000 policy threshold.
 - **Outcome:** `verifyAgencySpendingLimit` returned `false`. Fare difference exceeding policy limit is blocked from automated booking.
 
-### Scenario J: Agency Limit Exceeded Policy Exception Routing
-- **Verification:** Rebooking executed with option exceeding agency spending cap.
-- **Outcome:** Case routes to `AGENCY_APPROVAL_REQUIRED` &rarr; `MANUAL_APPROVAL_PENDING`. Crucially, this is classified as a governance policy event and **never as a payment gateway failure** (`PAYMENT_FAILED`).
+### Scenario J: Application Restart Recovery & Idempotency
+- **Verification:** Simulated backend restart while case is in active state (`AWAITING_PASSENGER_OTP`).
+- **Outcome:** State, selected option, and passenger phone number are accurately restored from database. Subsequent rebooking attempts on completed cases execute idempotently without duplicating bookings or payment transactions.
 
 ### Scenario K: Confirmed Failure Voids Card Authorization
 - **Verification:** Carrier reports definitive failure (seat inventory sold / locked).
-- **Outcome:** Uncaptured VCC authorization is immediately voided with card issuer (`voidAuthorization`), transitioning card status to `CANCELLED`. Case transitions to `BOOKING_FAILED`.
+- **Outcome:** Uncaptured VCC authorization is immediately voided with card issuer (`voidAuthorization`), transitioning card status to `CANCELLED` (`PAYMENT_VOIDED`). Case transitions to `BOOKING_FAILED`.
 
 ### Scenario L: Timeout Outcome Triggers Host Inquiry & Reconciliation
 - **Verification:** Rebooking provider times out (504 Gateway Timeout / network drop).
@@ -96,16 +100,17 @@
 - **Verification:** Created fresh booking `B-VIK-2` for Vikram Malhotra (`+919811223344`).
 - **Outcome:** Complete end-to-end flow: Ingress cancellation &rarr; "RESCUE MY TRIP" &rarr; Option selection &rarr; Dynamic OTP verification &rarr; Authoritative ticketing (`DONE`). Confirmed zero hardcoding to Ananya.
 
+### Scenario Q: Concurrent Passenger Callbacks Race Protection
+- **Verification:** Sent 4 simultaneous `RESCUE_MY_TRIP` callbacks concurrently using thread pool.
+- **Outcome:** All callbacks processed safely without database deadlocks or corrupted state transitions. Active case progressed cleanly to `AWAITING_OPTION_SELECTION`.
+
 ---
 
-## 3. Code Verification Commands Executed
+## 3. Playwright Agent Browser Verification
 
-```bash
-# 1. Agent TypeScript Typecheck
-cd flyo-rescue-demo/agent && npm run typecheck
-# Result: 0 errors
-
-# 2. Complete Backend Test Suite
-JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.20/libexec/openjdk.jdk/Contents/Home mvn test -f flyo-rescue-demo/backend/pom.xml
-# Result: Tests run: 90, Failures: 0, Errors: 0, Skipped: 0 (BUILD SUCCESS)
-```
+- **Command:** `npx tsx agent/verify-acceptance-ui.js` & `npx tsx agent/verify-mobile-mockup.js`
+- **Result:** Automated headless Chrome session successfully verified:
+  1. Airline portal checkout navigation.
+  2. Passenger form injection and VCC card processing.
+  3. Confirmation extraction yielding new airline PNR `R7X2K9`.
+  4. WhatsApp mobile mockup interactive rendering and message alignment.

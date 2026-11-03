@@ -1,0 +1,79 @@
+flowchart TD
+    A["Flight Disruption Detected<br/>(Authoritative Carrier Webhook / Aviation Radar Ingress)"] --> B["WhatsApp Interactive Notification<br/>[ RESCUE MY TRIP ] | [ ABANDON RESCUE ]"]
+    
+    %% Abandon Rescue Branch
+    B -->|ABANDON RESCUE| C["PASSENGER_DECLINED<br/>Close Rescue Case<br/>Preserve Original Ticket (No Auto-Refund)<br/>Alert Agency Operations Desk"]
+    
+    %% Rescue My Trip Branch
+    B -->|RESCUE MY TRIP| D["Validate Passenger Ownership<br/>Transition to FETCHING_ITINERARY<br/>Immediate Acknowledgment Dispatched<br/>Fetch Complete PNR & All Itinerary Segments<br/>Analyze Downstream Connection & Hotel Risks"]
+    
+    D --> E["Transition to SEARCHING_ALTERNATIVES<br/>Search Candidate Flights on Carrier Network<br/>Calculate Published MCT & Flyo Safety Buffer<br/>Deterministic Multi-Factor Option Ranking"]
+    
+    E --> F{"Alternative Flights<br/>Available?"}
+    F -->|No Alternatives| G["NO_OPTIONS_AVAILABLE &rarr; ESCALATED<br/>Hand over to Human Travel Desk Specialist"]
+    F -->|Viable Options Found| H["Transition to OPTIONS_READY &rarr; AWAITING_OPTION_SELECTION<br/>Send Ranked Options on WhatsApp<br/>• Option 1: FL101 (Direct) +₹0 (Recommended)<br/>• Option 2: FL301 (1 Stop) +₹4,200<br/>• Option 3: FL401 (Direct) +₹1,500"]
+    
+    H --> I["Passenger Selects Flight Option<br/>(e.g., SELECT_OPTION_O1 or SELECT_OPTION_O2)"]
+    
+    I --> J["OPTION_SELECTED &rarr; REVALIDATING_OPTION<br/>Revalidate Live Carrier Seat Availability & Fare Rules<br/>Recalculate Downstream Connection Feasibility"]
+    
+    J --> K{"Availability or<br/>Fare Changed?"}
+    K -->|Expired| L["OPTION_EXPIRED &rarr; REFRESHING_ALTERNATIVES<br/>Closed-Loop Inventory Refresh & Return to Search"]
+    K -->|Fare Changed| M["FARE_CHANGED &rarr; Display Updated Cost<br/>Invalidate Previous Consent & Require Fresh OTP"]
+    K -->|Confirmed Unchanged| N["AWAITING_PASSENGER_CONFIRMATION &rarr; AWAITING_PASSENGER_OTP<br/>Present Final Itinerary Preview & Exact Cost<br/>Generate Single-Use 6-Digit Confirmation OTP<br/>(Bound to Case + Phone + Option + Fare + Currency, 10m Expiry)"]
+    
+    L --> E
+    M --> J
+    
+    N --> O["AWAITING_PASSENGER_OTP<br/>Passenger Enters 6-Digit Consent Code in WhatsApp"]
+    
+    O --> P{"Verify Passenger OTP"}
+    P -->|Invalid Code &lt; 5 Attempts| Q["OTP_FAILED &rarr; AWAITING_PASSENGER_OTP<br/>Decrement Attempt Counter & Prompt Retry"]
+    P -->|Expired &gt; 10 min| R["OTP_EXPIRED &rarr; AWAITING_PASSENGER_OTP<br/>Regenerate Fresh Challenge & Prompt Retry"]
+    P -->|5 Failed Attempts| S["LOCKED_OUT &rarr; ESCALATED<br/>30-Minute Security Lockout<br/>Alert Agency Operations Desk"]
+    P -->|Valid OTP| T["PASSENGER_VERIFIED<br/>Passenger Consent Authoritatively Locked<br/>Invalidate Challenge to Prevent Replay"]
+    
+    Q --> O
+    R --> O
+    
+    T --> U{"Check Additional Fare<br/>Difference"}
+    
+    %% PATH A: Zero Additional Fare
+    U -->|₹0 Additional Fare| V["PATH A: NO PAYMENT REQUIRED<br/>• Skip VCC Issuance Entirely<br/>• Skip Payment Gateway Processing<br/>• Apply Agency Booking Authorization Policy<br/>• Transition: PASSENGER_VERIFIED &rarr; REBOOKING"]
+    
+    %% PATH B: Positive Additional Fare
+    U -->|Positive Fare Difference| W["PATH B: PAYMENT REQUIRED<br/>Transition: PASSENGER_VERIFIED &rarr; VERIFYING_AGENCY_APPROVAL<br/>Check Corporate Policy & Agency Spending Limits (e.g. ₹50k / ₹100k)"]
+    
+    W --> X{"Within Agency<br/>Limit?"}
+    X -->|Exceeded| Y["AGENCY_APPROVAL_REQUIRED &rarr; MANUAL_APPROVAL_PENDING<br/>Agency Policy Exception Review (Not a Payment Failure)<br/>Await Operator Budget Approval in Console"]
+    X -->|Approved| Z["PAYMENT_INSTRUMENT_READY<br/>Issue Single-Use Corporate Virtual Card (VCC)<br/>Locked to Case, Option, Approved Fare & MCC 3000"]
+    
+    Z --> AB["REBOOKING<br/>Dispatch Rebooking Subprocess with VCC Credentials"]
+    V --> AC["AUTHORIZED REBOOKING<br/>Airline NDC API / Playwright Partner Portal Engine"]
+    AB --> AC
+    
+    AC --> AD{"Rebooking Provider<br/>Execution Outcome"}
+    
+    %% Outcome A: Confirmed Success
+    AD -->|Outcome A: Confirmed Success| AH["VERIFYING_BOOKING<br/>Independently Verify Reservation on Airline Host System"]
+    AH --> AI["VERIFYING_TICKET<br/>Confirm Electronic Ticket (e-Ticket) Issuance & Coupon Validation"]
+    AI --> AP{"Path B Positive Fare?"}
+    AP -->|Yes| AQ["PAYMENT_AUTH_PENDING &rarr; PAYMENT_AUTHORIZED &rarr; PAYMENT_CAPTURED<br/>Record Settlement & Capture with Card Issuer"]
+    AP -->|No - Path A| AR["DONE (RESCUED)<br/>Update Core Booking Record to 'Rescued'"]
+    AQ --> AR
+    
+    AR --> AK["FINAL WHATSAPP CONFIRMATION<br/>Verified Itinerary + Confirmed Airline PNR<br/>e-Ticket Status (ISSUED & VALIDATED)<br/>Secure Itinerary Link + Baggage Transfer Guidance<br/>(Boarding Pass Opens at Carrier Check-In 24h Prior)"]
+    
+    %% Outcome B: Confirmed Failure
+    AD -->|Outcome B: Definitive Failure| BF["Definitive Booking Failure<br/>(e.g., Confirmed Sold Out / Carrier Rejection)"]
+    BF --> BG{"Path B VCC Issued?"}
+    BG -->|Yes| BH["PAYMENT_VOIDED / PAYMENT_REFUNDED<br/>Void Uncaptured VCC Authorization or Refund Captured Payment"]
+    BG -->|No| BI["BOOKING_FAILED &rarr; ESCALATED<br/>Alert Operations Console & Notify Passenger"]
+    BH --> BI
+    
+    %% Outcome C: Unknown / Timeout
+    AD -->|Outcome C: Unknown Outcome / Timeout| TO["PAYMENT_RECONCILIATION_REQUIRED &rarr; RECONCILING<br/>Query Carrier Host using Idempotency Key (caseId)"]
+    TO --> TR{"Carrier Host<br/>Inquiry Result"}
+    TR -->|Booking Exists| AH
+    TR -->|No Booking Found| BH
+    TR -->|Still Unknown / Ambiguous| TS["PAYMENT_OUTCOME_UNKNOWN &rarr; FAILED_ESCALATED<br/>Retain Recoverable Case (No Blind Retries)<br/>Alert Agency Operations Desk for Manual Resolution"]
