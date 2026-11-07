@@ -64,9 +64,6 @@ jobs:
           POSTGRES_URL: jdbc:postgresql://localhost:5432/flyodb
           POSTGRES_USER: flyo_admin
           POSTGRES_PASSWORD: flyo_test_password
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/flyodb
-          SPRING_DATASOURCE_USERNAME: flyo_admin
-          SPRING_DATASOURCE_PASSWORD: flyo_test_password
 
   frontend-verification:
     name: Frontend Lint & Production Asset Build
