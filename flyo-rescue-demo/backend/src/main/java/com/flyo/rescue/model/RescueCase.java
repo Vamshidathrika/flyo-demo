@@ -43,6 +43,22 @@ public class RescueCase {
     private Integer passengerConfirmedAmount;
     private String passengerConfirmedCurrency;
     private LocalDateTime passengerOtpVerifiedAt;
+
+    private Integer reconciledConfidence = 95;
+
+    @Column(length = 2000)
+    private String disruptionEvidence;
+
+    @Column(length = 1000)
+    private String weatherSummary;
+
+    private String tenantId = "tenant_default";
+    
+    private String correlationId;
+    private String ticketNumber;
+    private String ticketStatus = "UNVERIFIED";
+    private String notificationStatus = "PENDING";
+    private String crmSyncStatus = "PENDING";
     
     private LocalDateTime createdAt;
     
@@ -259,5 +275,77 @@ public class RescueCase {
 
     public void setPassengerOtpVerifiedAt(LocalDateTime passengerOtpVerifiedAt) {
         this.passengerOtpVerifiedAt = passengerOtpVerifiedAt;
+    }
+
+    public Integer getReconciledConfidence() {
+        return reconciledConfidence;
+    }
+
+    public void setReconciledConfidence(Integer reconciledConfidence) {
+        this.reconciledConfidence = reconciledConfidence;
+    }
+
+    public String getDisruptionEvidence() {
+        return disruptionEvidence;
+    }
+
+    public void setDisruptionEvidence(String disruptionEvidence) {
+        this.disruptionEvidence = disruptionEvidence;
+    }
+
+    public String getWeatherSummary() {
+        return weatherSummary;
+    }
+
+    public void setWeatherSummary(String weatherSummary) {
+        this.weatherSummary = weatherSummary;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public String getTicketNumber() {
+        return ticketNumber;
+    }
+
+    public void setTicketNumber(String ticketNumber) {
+        this.ticketNumber = ticketNumber;
+    }
+
+    public String getTicketStatus() {
+        return ticketStatus;
+    }
+
+    public void setTicketStatus(String ticketStatus) {
+        this.ticketStatus = ticketStatus;
+    }
+
+    public String getNotificationStatus() {
+        return notificationStatus;
+    }
+
+    public void setNotificationStatus(String notificationStatus) {
+        this.notificationStatus = notificationStatus;
+    }
+
+    public String getCrmSyncStatus() {
+        return crmSyncStatus;
+    }
+
+    public void setCrmSyncStatus(String crmSyncStatus) {
+        this.crmSyncStatus = crmSyncStatus;
     }
 }

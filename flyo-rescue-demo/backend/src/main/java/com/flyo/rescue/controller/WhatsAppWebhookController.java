@@ -170,15 +170,21 @@ public class WhatsAppWebhookController {
             @RequestParam(value = "hub.challenge", required = false) String challenge,
             @RequestParam(value = "hub.verify_token", required = false) String verifyToken) {
 
-        log.info("[Meta Webhook Verification] Mode: {}, Token: {}, Challenge: {}", mode, verifyToken, challenge);
+        log.info("[Meta Webhook Verification] Mode: {}, Token: {}, Challenge: {}", mode, maskToken(verifyToken), challenge);
 
         if ("subscribe".equals(mode) && config.getVerifyToken().equals(verifyToken)) {
             log.info("[Meta Webhook Verification] Successfully verified Meta challenge token!");
             return ResponseEntity.ok(challenge);
         }
 
-        log.warn("[Meta Webhook Verification] Failed verify token check. Mode: {}, Token: {}", mode, verifyToken);
+        log.warn("[Meta Webhook Verification] Failed verify token check. Mode: {}, Token: {}", mode, maskToken(verifyToken));
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Verification failed: invalid token");
+    }
+
+    private String maskToken(String token) {
+        if (token == null || token.isBlank()) return "null";
+        if (token.length() <= 4) return "****";
+        return token.substring(0, 2) + "****" + token.substring(token.length() - 2);
     }
 
     /**
@@ -209,6 +215,22 @@ public class WhatsAppWebhookController {
                     if (changesArray.isArray()) {
                         for (JsonNode change : changesArray) {
                             JsonNode value = change.path("value");
+
+                            // Process message delivery status receipts (sent, delivered, read, failed)
+                            JsonNode statuses = value.path("statuses");
+                            if (statuses.isArray()) {
+                                for (JsonNode statusNode : statuses) {
+                                    String statusId = statusNode.path("id").asText();
+                                    String status = statusNode.path("status").asText();
+                                    String recipientId = statusNode.path("recipient_id").asText();
+                                    log.info("[Meta Webhook Status] Message {} status update: {} for recipient {}", statusId, status, recipientId);
+                                    if ("failed".equalsIgnoreCase(status)) {
+                                        JsonNode errors = statusNode.path("errors");
+                                        log.warn("[Meta Webhook Status] Outbound message delivery failed for {}: {}", statusId, errors);
+                                    }
+                                }
+                            }
+
                             JsonNode messages = value.path("messages");
                             if (messages.isArray()) {
                                 for (JsonNode msg : messages) {

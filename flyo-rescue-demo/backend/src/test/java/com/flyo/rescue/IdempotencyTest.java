@@ -18,8 +18,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.springframework.security.test.context.support.WithMockUser;
+
 @SpringBootTest
 @AutoConfigureMockMvc
+@WithMockUser(username = "admin", roles = {"ADMIN", "SUPERVISOR", "OPERATOR"})
 public class IdempotencyTest {
 
     @Autowired
@@ -27,6 +30,33 @@ public class IdempotencyTest {
 
     @MockBean
     private RebookService rebookService;
+
+    @Autowired
+    private com.flyo.rescue.repository.RescueCaseRepository rescueCaseRepository;
+
+    @Autowired
+    private com.flyo.rescue.repository.SimulatedMessageRepository messageRepository;
+
+    @Autowired
+    private com.flyo.rescue.repository.AuditEventRepository auditEventRepository;
+
+    @Autowired
+    private com.flyo.rescue.repository.RebookOptionRepository optionRepository;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        messageRepository.deleteAll();
+        auditEventRepository.deleteAll();
+        optionRepository.deleteAll();
+        rescueCaseRepository.findById("C1").ifPresent(c -> {
+            c.setState("DETECTED");
+            c.setApprovedOptionId(null);
+            c.setApprovedBy(null);
+            c.setApprovedAt(null);
+            c.setNewPnr(null);
+            rescueCaseRepository.save(c);
+        });
+    }
 
     @Test
     @DisplayName("Chunk 6 Done-Test: Approve O2 -> rebook returns R7X2K9; rebooking again returns same PNR without duplicate execution")

@@ -21,8 +21,11 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.springframework.security.test.context.support.WithMockUser;
+
 @SpringBootTest
 @AutoConfigureMockMvc
+@WithMockUser(username = "admin", roles = {"ADMIN", "SUPERVISOR", "OPERATOR"})
 public class ApprovalGateTest {
 
     @Autowired
@@ -96,14 +99,14 @@ public class ApprovalGateTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state", is("DETECTED")));
 
-        // 7. Approve flow on active case: Operator approves Option O2 -> moves to AWAITING_APPROVAL
+        // 7. Approve flow on active case: Operator approves Option O2 -> moves to APPROVED
         mockMvc.perform(post("/api/cases/C1/approve")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"optionId\": \"O2\", \"approvedBy\": \"Flyo Operator\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.approvedOptionId", is("O2")))
                 .andExpect(jsonPath("$.approvedBy", is("Flyo Operator")))
-                .andExpect(jsonPath("$.state", is("AWAITING_APPROVAL")));
+                .andExpect(jsonPath("$.state", is("APPROVED")));
 
         // 8. Now rebook is permitted after approval -> moves to DONE with new PNR R7X2K9
         mockMvc.perform(post("/api/cases/C1/rebook")

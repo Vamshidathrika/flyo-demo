@@ -57,6 +57,7 @@ public class CaseStateMachineService {
 
     // Operator Approval Bridge (for backwards compatibility & agency console actions)
     public static final String STATE_AWAITING_APPROVAL = "AWAITING_APPROVAL";
+    public static final String STATE_APPROVED = "APPROVED";
 
     // Exceptional States
     public static final String STATE_PASSENGER_DECLINED = "PASSENGER_DECLINED";
@@ -85,7 +86,7 @@ public class CaseStateMachineService {
 
         // DETECTED
         map.put(STATE_DETECTED, Set.of(
-                STATE_OPTIONS_READY, STATE_ESCALATED, STATE_AWAITING_APPROVAL,
+                STATE_OPTIONS_READY, STATE_ESCALATED, STATE_AWAITING_APPROVAL, STATE_APPROVED,
                 STATE_PASSENGER_NOTIFIED, STATE_AWAITING_PASSENGER_DECISION,
                 STATE_FETCHING_ITINERARY, STATE_PASSENGER_DECLINED
         ));
@@ -98,7 +99,7 @@ public class CaseStateMachineService {
 
         // AWAITING PASSENGER DECISION (Rescue vs Abandon)
         map.put(STATE_AWAITING_PASSENGER_DECISION, Set.of(
-                STATE_FETCHING_ITINERARY, STATE_PASSENGER_DECLINED,
+                STATE_FETCHING_ITINERARY, STATE_OPTIONS_READY, STATE_PASSENGER_DECLINED,
                 STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED
         ));
 
@@ -116,7 +117,7 @@ public class CaseStateMachineService {
 
         // OPTIONS READY
         map.put(STATE_OPTIONS_READY, Set.of(
-                STATE_OPTIONS_READY, STATE_AWAITING_APPROVAL, STATE_ESCALATED,
+                STATE_OPTIONS_READY, STATE_AWAITING_APPROVAL, STATE_APPROVED, STATE_ESCALATED,
                 STATE_AWAITING_OPTION_SELECTION, STATE_OPTION_SELECTED,
                 STATE_OPTION_EXPIRED, STATE_NO_OPTIONS_AVAILABLE,
                 STATE_PASSENGER_DECLINED, STATE_MANUAL_INTERVENTION_REQUIRED
@@ -177,23 +178,23 @@ public class CaseStateMachineService {
         // PASSENGER VERIFIED (Branches based on ₹0 vs Positive Fare)
         map.put(STATE_PASSENGER_VERIFIED, Set.of(
                 STATE_REVALIDATING_OPTION, STATE_VERIFYING_AGENCY_APPROVAL, STATE_PAYMENT_INSTRUMENT_READY,
-                STATE_PAYMENT_AUTH_PENDING, STATE_REBOOKING, STATE_AWAITING_APPROVAL, STATE_ESCALATED, STATE_PASSENGER_DECLINED
+                STATE_PAYMENT_AUTH_PENDING, STATE_REBOOKING, STATE_AWAITING_APPROVAL, STATE_APPROVED, STATE_ESCALATED, STATE_PASSENGER_DECLINED
         ));
 
         // VERIFYING AGENCY APPROVAL (Path B)
         map.put(STATE_VERIFYING_AGENCY_APPROVAL, Set.of(
                 STATE_PAYMENT_INSTRUMENT_READY, STATE_AGENCY_APPROVAL_REQUIRED, STATE_MANUAL_APPROVAL_PENDING,
-                STATE_PAYMENT_AUTH_PENDING, STATE_PAYMENT_FAILED, STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED
+                STATE_APPROVED, STATE_PAYMENT_AUTH_PENDING, STATE_PAYMENT_FAILED, STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED
         ));
 
         // AGENCY APPROVAL REQUIRED (When spending limit exceeded)
         map.put(STATE_AGENCY_APPROVAL_REQUIRED, Set.of(
-                STATE_MANUAL_APPROVAL_PENDING, STATE_PAYMENT_INSTRUMENT_READY, STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED
+                STATE_MANUAL_APPROVAL_PENDING, STATE_APPROVED, STATE_PAYMENT_INSTRUMENT_READY, STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED
         ));
 
         // MANUAL APPROVAL PENDING
         map.put(STATE_MANUAL_APPROVAL_PENDING, Set.of(
-                STATE_PAYMENT_INSTRUMENT_READY, STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED
+                STATE_APPROVED, STATE_PAYMENT_INSTRUMENT_READY, STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED
         ));
 
         // PAYMENT INSTRUMENT READY (VCC prepared & locked, prior to booking dispatch)
@@ -258,29 +259,36 @@ public class CaseStateMachineService {
                 STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED
         ));
 
-        // AWAITING APPROVAL (Operator Bridge)
+        // AWAITING APPROVAL (Unapproved queue - awaiting explicit human supervisor authorization)
         map.put(STATE_AWAITING_APPROVAL, Set.of(
-                STATE_OPTIONS_READY, STATE_REBOOKING, STATE_PAYMENT_AUTH_PENDING,
-                STATE_ESCALATED, STATE_PASSENGER_DECLINED, STATE_AWAITING_APPROVAL
+                STATE_APPROVED, STATE_OPTIONS_READY, STATE_ESCALATED, STATE_PASSENGER_DECLINED
+        ));
+
+        // APPROVED (Explicit Human Approval Granted - Unlocks consequential execution)
+        map.put(STATE_APPROVED, Set.of(
+                STATE_REBOOKING, STATE_PAYMENT_INSTRUMENT_READY, STATE_PAYMENT_AUTH_PENDING,
+                STATE_OPTIONS_READY, STATE_ESCALATED, STATE_FAILED_ESCALATED, STATE_PASSENGER_DECLINED,
+                STATE_MANUAL_INTERVENTION_REQUIRED, STATE_RECONCILING
         ));
 
         // REBOOKING
         map.put(STATE_REBOOKING, Set.of(
                 STATE_PAYMENT_AUTH_PENDING, STATE_PAYMENT_AUTHORIZED, STATE_PAYMENT_CAPTURED, STATE_PAYMENT_VERIFIED,
                 STATE_VERIFYING_BOOKING, STATE_VERIFYING_TICKET, STATE_RECONCILING, STATE_DONE, STATE_BOOKING_FAILED,
-                STATE_FAILED_ESCALATED, STATE_PAYMENT_RECONCILIATION_REQUIRED, STATE_PAYMENT_OUTCOME_UNKNOWN
+                STATE_FAILED_ESCALATED, STATE_PAYMENT_RECONCILIATION_REQUIRED, STATE_PAYMENT_OUTCOME_UNKNOWN,
+                STATE_MANUAL_INTERVENTION_REQUIRED
         ));
 
         // VERIFYING BOOKING
         map.put(STATE_VERIFYING_BOOKING, Set.of(
                 STATE_VERIFYING_TICKET, STATE_RECONCILING, STATE_DONE, STATE_BOOKING_FAILED, STATE_FAILED_ESCALATED,
-                STATE_PAYMENT_RECONCILIATION_REQUIRED
+                STATE_MANUAL_INTERVENTION_REQUIRED, STATE_ESCALATED, STATE_PAYMENT_RECONCILIATION_REQUIRED
         ));
 
         // VERIFYING TICKET
         map.put(STATE_VERIFYING_TICKET, Set.of(
                 STATE_RECONCILING, STATE_DONE, STATE_BOOKING_FAILED, STATE_FAILED_ESCALATED,
-                STATE_PAYMENT_RECONCILIATION_REQUIRED
+                STATE_MANUAL_INTERVENTION_REQUIRED, STATE_ESCALATED, STATE_PAYMENT_RECONCILIATION_REQUIRED
         ));
 
         // BOOKING FAILED
@@ -355,6 +363,11 @@ public class CaseStateMachineService {
 
     @Transactional
     public void transition(RescueCase rescueCase, String toState, String actor, String reason) {
+        transition(rescueCase, toState, actor, reason, rescueCase.getCorrelationId(), null);
+    }
+
+    @Transactional
+    public void transition(RescueCase rescueCase, String toState, String actor, String reason, String correlationId, String externalRef) {
         String fromState = rescueCase.getState();
         if (fromState != null && fromState.equals(toState)) {
             // Idempotent transition to same state: record audit but no illegal transition error
@@ -372,8 +385,11 @@ public class CaseStateMachineService {
         // Apply transition
         rescueCase.setState(toState);
         rescueCase.setUpdatedAt(LocalDateTime.now());
+        if (correlationId != null) {
+            rescueCase.setCorrelationId(correlationId);
+        }
 
-        // 1. Record in immutable StateTransition ledger
+        // 1. Record in immutable StateTransition ledger with causal tracking
         StateTransition transition = new StateTransition(
                 rescueCase.getId(),
                 fromState,
@@ -381,6 +397,11 @@ public class CaseStateMachineService {
                 actor != null ? actor : "Flyo System",
                 reason != null ? reason : "State change"
         );
+        String tenant = rescueCase.getTenantId() != null ? rescueCase.getTenantId() : com.flyo.rescue.security.TenantContext.getTenantId();
+        transition.setTenantId(tenant);
+        transition.setCorrelationId(correlationId != null ? correlationId : rescueCase.getCorrelationId());
+        transition.setCausationId("STATE_MACHINE_TRANSITION");
+        transition.setExternalReference(externalRef);
         transitionRepository.save(transition);
 
         // 2. Append to AuditEvent trail
@@ -396,11 +417,11 @@ public class CaseStateMachineService {
                 "RESCUE_CASE",
                 rescueCase.getId(),
                 "CASE_STATE_CHANGED",
-                String.format("{\"caseId\":\"%s\",\"fromState\":\"%s\",\"toState\":\"%s\",\"actor\":\"%s\"}",
-                        rescueCase.getId(), fromState, toState, actor)
+                String.format("{\"caseId\":\"%s\",\"fromState\":\"%s\",\"toState\":\"%s\",\"actor\":\"%s\",\"correlationId\":\"%s\"}",
+                        rescueCase.getId(), fromState, toState, actor, correlationId != null ? correlationId : "")
         );
 
-        log.info("[StateMachine] Case {} transitioned {} -> {} by {} ({})",
-                rescueCase.getId(), fromState, toState, actor, reason);
+        log.info("[StateMachine] Case {} transitioned {} -> {} by {} ({}) [corrId={}]",
+                rescueCase.getId(), fromState, toState, actor, reason, correlationId);
     }
 }

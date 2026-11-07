@@ -20,6 +20,7 @@ public class Booking {
     private String agency;
     private String status;
     private String passengerPhone;
+    private String tenantId = "tenant_default";
 
     public Booking() {
     }
@@ -140,5 +141,13 @@ public class Booking {
 
     public void setPassengerPhone(String passengerPhone) {
         this.passengerPhone = passengerPhone;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 }

@@ -47,8 +47,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 4. Corporate Treasury VCC controls: single-use issuance, MCC locking, INR currency.
  * 5. Complete sensitive card data isolation (no PAN/CVV leakage in JSON responses).
  */
+import org.springframework.security.test.context.support.WithMockUser;
+
 @SpringBootTest
 @AutoConfigureMockMvc
+@WithMockUser(username = "admin", roles = {"ADMIN", "SUPERVISOR", "OPERATOR"})
 public class FinancialAndBookingSafetyTest {
 
     @Autowired
@@ -126,14 +129,14 @@ public class FinancialAndBookingSafetyTest {
 
         // First approval
         RescueCase firstApproval = caseService.approveOption("C1", "O2", "Flyo Finance Desk");
-        assertEquals("AWAITING_APPROVAL", firstApproval.getState());
+        assertEquals("APPROVED", firstApproval.getState());
         assertEquals("O2", firstApproval.getApprovedOptionId());
 
         long cardCountAfterFirst = cardRepository.count();
 
         // Second duplicate approval with same option
         RescueCase secondApproval = caseService.approveOption("C1", "O2", "Flyo Finance Desk");
-        assertEquals("AWAITING_APPROVAL", secondApproval.getState());
+        assertEquals("APPROVED", secondApproval.getState());
 
         long cardCountAfterSecond = cardRepository.count();
         assertEquals(cardCountAfterFirst, cardCountAfterSecond, "Duplicate approval must NOT issue duplicate Virtual Card");

@@ -19,8 +19,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.springframework.security.test.context.support.WithMockUser;
+
 @SpringBootTest
 @AutoConfigureMockMvc
+@WithMockUser(username = "admin", roles = {"ADMIN", "SUPERVISOR", "OPERATOR"})
 public class AuditAndMessageTest {
 
     @Autowired
@@ -38,11 +41,15 @@ public class AuditAndMessageTest {
     @Autowired
     private com.flyo.rescue.repository.RebookOptionRepository optionRepository;
 
+    @Autowired
+    private com.flyo.rescue.repository.RescueCaseRepository rescueCaseRepository;
+
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
         messageRepository.deleteAll();
         auditEventRepository.deleteAll();
         optionRepository.deleteAll();
+        rescueCaseRepository.deleteById("C1");
     }
 
     @Test

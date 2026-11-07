@@ -1,0 +1,250 @@
+{
+  "model_version": "v2.0.0-multiseason",
+  "evaluation_time_utc": "2026-11-05T15:49:31.310350+00:00",
+  "test_sample_size": 50000,
+  "test_date_range": "2024-07-01 to 2024-07-31 (Summer Convective Season)",
+  "cancellation_evaluation": {
+    "dummy_baseline": {
+      "roc_auc": 0.5,
+      "pr_auc": 0.02962,
+      "brier_score": 0.028798905600000008,
+      "ece": 0.007499999999999993
+    },
+    "logistic_regression": {
+      "roc_auc": 0.4445683995879629,
+      "pr_auc": 0.02661353712660697,
+      "brier_score": 0.18888315708041298,
+      "ece": 0.3196195032777404
+    },
+    "xgboost_calibrated_v2": {
+      "roc_auc": 0.5279368966867488,
+      "pr_auc": 0.03175880282983774,
+      "brier_score": 0.029305203485863816,
+      "ece": 0.023890094342750776,
+      "threshold_performance": {
+        "th_0.02": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "flagged_flight_count": 0,
+          "true_positives": 0
+        },
+        "th_0.05": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "flagged_flight_count": 0,
+          "true_positives": 0
+        },
+        "th_0.10": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "flagged_flight_count": 0,
+          "true_positives": 0
+        },
+        "th_0.20": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "flagged_flight_count": 0,
+          "true_positives": 0
+        }
+      },
+      "confusion_matrix_at_10": [
+        [
+          48519,
+          0
+        ],
+        [
+          1481,
+          0
+        ]
+      ]
+    }
+  },
+  "delay120_evaluation": {
+    "dummy_baseline": {
+      "roc_auc": 0.5,
+      "pr_auc": 0.05234,
+      "brier_score": 0.04985482057777777,
+      "ece": 0.015946666666666665
+    },
+    "logistic_regression": {
+      "roc_auc": 0.5679065280204981,
+      "pr_auc": 0.06327722099225605,
+      "brier_score": 0.20571397146960163,
+      "ece": 0.3460919019611974
+    },
+    "xgboost_calibrated_v2": {
+      "roc_auc": 0.5949706975275447,
+      "pr_auc": 0.06927413362247017,
+      "brier_score": 0.05075209246507615,
+      "ece": 0.03458358700536082,
+      "threshold_performance": {
+        "th_0.05": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "flagged_flight_count": 0,
+          "true_positives": 0
+        },
+        "th_0.10": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "flagged_flight_count": 0,
+          "true_positives": 0
+        },
+        "th_0.15": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "flagged_flight_count": 0,
+          "true_positives": 0
+        },
+        "th_0.20": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "flagged_flight_count": 0,
+          "true_positives": 0
+        }
+      },
+      "confusion_matrix_at_15": [
+        [
+          47383,
+          0
+        ],
+        [
+          2617,
+          0
+        ]
+      ]
+    }
+  },
+  "continuous_delay_evaluation": {
+    "dummy_baseline": {
+      "mae": 34.050900014699955,
+      "rmse": 73.03100011981292,
+      "median_ae": 21.396144898637424
+    },
+    "ridge_baseline": {
+      "mae": 34.342205616627915,
+      "rmse": 73.10726689607574,
+      "median_ae": 20.28432447365217
+    },
+    "xgboost_regressor_v2": {
+      "mae": 34.001481815846745,
+      "rmse": 72.98523496334603,
+      "median_ae": 20.94990825653076
+    }
+  },
+  "carrier_subgroup_metrics": {
+    "WN": {
+      "test_flight_count": 10109,
+      "cancellation_rate": 0.005935305173607676,
+      "delay120_rate": 0.028588386586210306,
+      "calibrated_cancellation_brier": 0.005897172809062634,
+      "calibrated_delay120_brier": 0.027889941387690128
+    },
+    "AA": {
+      "test_flight_count": 6919,
+      "cancellation_rate": 0.02717155658332129,
+      "delay120_rate": 0.08050296285590403,
+      "calibrated_cancellation_brier": 0.02688968615087423,
+      "calibrated_delay120_brier": 0.07782554215893796
+    },
+    "DL": {
+      "test_flight_count": 7308,
+      "cancellation_rate": 0.06609195402298851,
+      "delay120_rate": 0.0692391899288451,
+      "calibrated_cancellation_brier": 0.06552255986864514,
+      "calibrated_delay120_brier": 0.06710765879283188
+    },
+    "UA": {
+      "test_flight_count": 5189,
+      "cancellation_rate": 0.03950664867989979,
+      "delay120_rate": 0.06455964540373868,
+      "calibrated_cancellation_brier": 0.03891285412290292,
+      "calibrated_delay120_brier": 0.06252045835821188
+    },
+    "OO": {
+      "test_flight_count": 4972,
+      "cancellation_rate": 0.008447304907481898,
+      "delay120_rate": 0.03419147224456959,
+      "calibrated_cancellation_brier": 0.008377055428516451,
+      "calibrated_delay120_brier": 0.033245607740341174
+    },
+    "YX": {
+      "test_flight_count": 2015,
+      "cancellation_rate": 0.026799007444168736,
+      "delay120_rate": 0.0456575682382134,
+      "calibrated_cancellation_brier": 0.02651068234740038,
+      "calibrated_delay120_brier": 0.044342072527854666
+    },
+    "MQ": {
+      "test_flight_count": 2069,
+      "cancellation_rate": 0.006766553890768487,
+      "delay120_rate": 0.031899468342194294,
+      "calibrated_cancellation_brier": 0.0067289836738526594,
+      "calibrated_delay120_brier": 0.031050438928926758
+    },
+    "NK": {
+      "test_flight_count": 1917,
+      "cancellation_rate": 0.056338028169014086,
+      "delay120_rate": 0.06885758998435054,
+      "calibrated_cancellation_brier": 0.0557222488566043,
+      "calibrated_delay120_brier": 0.06668204077818328
+    },
+    "B6": {
+      "test_flight_count": 1600,
+      "cancellation_rate": 0.011875,
+      "delay120_rate": 0.05625,
+      "calibrated_cancellation_brier": 0.011762599118685057,
+      "calibrated_delay120_brier": 0.054496276772222824
+    },
+    "AS": {
+      "test_flight_count": 1886,
+      "cancellation_rate": 0.012195121951219513,
+      "delay120_rate": 0.012725344644750796,
+      "calibrated_cancellation_brier": 0.012052473779209866,
+      "calibrated_delay120_brier": 0.012582572091650066
+    },
+    "9E": {
+      "test_flight_count": 1349,
+      "cancellation_rate": 0.0770941438102298,
+      "delay120_rate": 0.06893995552260934,
+      "calibrated_cancellation_brier": 0.07612529086753814,
+      "calibrated_delay120_brier": 0.06671534765078779
+    },
+    "OH": {
+      "test_flight_count": 1606,
+      "cancellation_rate": 0.0448318804483188,
+      "delay120_rate": 0.08343711083437111,
+      "calibrated_cancellation_brier": 0.044209989716533456,
+      "calibrated_delay120_brier": 0.08061326306641613
+    },
+    "F9": {
+      "test_flight_count": 1518,
+      "cancellation_rate": 0.04743083003952569,
+      "delay120_rate": 0.05006587615283267,
+      "calibrated_cancellation_brier": 0.04689661111627184,
+      "calibrated_delay120_brier": 0.048550458996010175
+    },
+    "G4": {
+      "test_flight_count": 1023,
+      "cancellation_rate": 0.03128054740957967,
+      "delay120_rate": 0.04594330400782014,
+      "calibrated_cancellation_brier": 0.0309217990549315,
+      "calibrated_delay120_brier": 0.044583950995772906
+    },
+    "HA": {
+      "test_flight_count": 520,
+      "cancellation_rate": 0.009615384615384616,
+      "delay120_rate": 0.011538461538461539,
+      "calibrated_cancellation_brier": 0.009537008489472592,
+      "calibrated_delay120_brier": 0.011407549335084836
+    }
+  }
+}

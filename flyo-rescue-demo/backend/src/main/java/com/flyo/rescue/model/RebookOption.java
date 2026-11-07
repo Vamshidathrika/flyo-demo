@@ -20,6 +20,9 @@ public class RebookOption {
     private boolean savesConnection;
     private String reason;
     private int rank;
+    private Integer riskScore = 15;
+    private String riskLevel = "LOW";
+    private String riskFactors;
 
     public RebookOption() {
     }
@@ -132,5 +135,29 @@ public class RebookOption {
 
     public void setRank(int rank) {
         this.rank = rank;
+    }
+
+    public Integer getRiskScore() {
+        return riskScore;
+    }
+
+    public void setRiskScore(Integer riskScore) {
+        this.riskScore = riskScore;
+    }
+
+    public String getRiskLevel() {
+        return riskLevel;
+    }
+
+    public void setRiskLevel(String riskLevel) {
+        this.riskLevel = riskLevel;
+    }
+
+    public String getRiskFactors() {
+        return riskFactors;
+    }
+
+    public void setRiskFactors(String riskFactors) {
+        this.riskFactors = riskFactors;
     }
 }

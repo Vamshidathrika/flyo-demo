@@ -89,6 +89,11 @@ public class MctRulesService {
         PUBLISHED_MCT_MATRIX = Collections.unmodifiableMap(matrix);
     }
 
+    public boolean isAirportMctPublished(String airportCode) {
+        if (airportCode == null || airportCode.isBlank()) return false;
+        return PUBLISHED_MCT_MATRIX.containsKey(airportCode.toUpperCase().trim());
+    }
+
     public int getPublishedMctMinutes(String airportCode, TransferType transferType) {
         if (airportCode != null) {
             Map<TransferType, Integer> airportRules = PUBLISHED_MCT_MATRIX.get(airportCode.toUpperCase().trim());
@@ -96,14 +101,14 @@ public class MctRulesService {
                 return airportRules.get(transferType);
             }
         }
-        // Default published fallback
+        // Conservative published fallback for unlisted airports
         switch (transferType) {
-            case DOMESTIC_TO_DOMESTIC: return 60;
-            case DOMESTIC_TO_INTERNATIONAL: return 90;
-            case INTERNATIONAL_TO_DOMESTIC: return 120;
-            case INTERNATIONAL_TO_INTERNATIONAL: return 90;
-            case INTER_TERMINAL: return 120;
-            default: return 90;
+            case DOMESTIC_TO_DOMESTIC: return 75;
+            case DOMESTIC_TO_INTERNATIONAL: return 120;
+            case INTERNATIONAL_TO_DOMESTIC: return 150;
+            case INTERNATIONAL_TO_INTERNATIONAL: return 120;
+            case INTER_TERMINAL: return 150;
+            default: return 120;
         }
     }
 
@@ -122,14 +127,19 @@ public class MctRulesService {
     }
 
     public MctEvaluation evaluate(String airportCode, TransferType transferType, int actualBufferMinutes) {
+        boolean known = isAirportMctPublished(airportCode);
         int publishedMct = getPublishedMctMinutes(airportCode, transferType);
         int flyoPolicy = getFlyoPolicyMctMinutes(transferType);
 
         boolean meetsPublished = actualBufferMinutes >= publishedMct;
         boolean meetsFlyo = actualBufferMinutes >= flyoPolicy;
+        boolean requiresManualReview = !known || (!meetsFlyo && meetsPublished);
 
         String description;
-        if (meetsFlyo) {
+        if (!known) {
+            description = String.format("Airport %s MCT rules not officially published in matrix. Default conservative buffer applied (%d min). Manual connection feasibility review required.",
+                    airportCode, publishedMct);
+        } else if (meetsFlyo) {
             description = String.format("Buffer %d min satisfies both airport published MCT (%d min) and Flyo policy threshold (%d min).",
                     actualBufferMinutes, publishedMct, flyoPolicy);
         } else if (meetsPublished) {
@@ -140,7 +150,7 @@ public class MctRulesService {
                     actualBufferMinutes, publishedMct, flyoPolicy);
         }
 
-        return new MctEvaluation(publishedMct, flyoPolicy, actualBufferMinutes, meetsPublished, meetsFlyo, description);
+        return new MctEvaluation(publishedMct, flyoPolicy, actualBufferMinutes, meetsPublished, meetsFlyo, known, requiresManualReview, description);
     }
 
     public static class MctEvaluation {
@@ -149,15 +159,25 @@ public class MctRulesService {
         private final int actualBufferMinutes;
         private final boolean meetsPublishedMct;
         private final boolean meetsFlyoPolicy;
+        private final boolean knownAirportMct;
+        private final boolean requiresManualReview;
         private final String summary;
 
         public MctEvaluation(int publishedMctMinutes, int flyoPolicyMinutes, int actualBufferMinutes,
                              boolean meetsPublishedMct, boolean meetsFlyoPolicy, String summary) {
+            this(publishedMctMinutes, flyoPolicyMinutes, actualBufferMinutes, meetsPublishedMct, meetsFlyoPolicy, true, false, summary);
+        }
+
+        public MctEvaluation(int publishedMctMinutes, int flyoPolicyMinutes, int actualBufferMinutes,
+                             boolean meetsPublishedMct, boolean meetsFlyoPolicy,
+                             boolean knownAirportMct, boolean requiresManualReview, String summary) {
             this.publishedMctMinutes = publishedMctMinutes;
             this.flyoPolicyMinutes = flyoPolicyMinutes;
             this.actualBufferMinutes = actualBufferMinutes;
             this.meetsPublishedMct = meetsPublishedMct;
             this.meetsFlyoPolicy = meetsFlyoPolicy;
+            this.knownAirportMct = knownAirportMct;
+            this.requiresManualReview = requiresManualReview;
             this.summary = summary;
         }
 
@@ -166,6 +186,8 @@ public class MctRulesService {
         public int getActualBufferMinutes() { return actualBufferMinutes; }
         public boolean isMeetsPublishedMct() { return meetsPublishedMct; }
         public boolean isMeetsFlyoPolicy() { return meetsFlyoPolicy; }
+        public boolean isKnownAirportMct() { return knownAirportMct; }
+        public boolean isRequiresManualReview() { return requiresManualReview; }
         public String getSummary() { return summary; }
     }
 }

@@ -1,0 +1,188 @@
+{
+  "top_gain_cancellation": [
+    {
+      "feature": "day_of_month",
+      "gain": 1066.1561279296875
+    },
+    {
+      "feature": "day_of_week",
+      "gain": 557.3882446289062
+    },
+    {
+      "feature": "origin_prior_cancel_rate",
+      "gain": 534.8491821289062
+    },
+    {
+      "feature": "dest_prior_cancel_rate",
+      "gain": 369.039794921875
+    },
+    {
+      "feature": "origin_is_adverse",
+      "gain": 231.80821228027344
+    },
+    {
+      "feature": "is_dep_night",
+      "gain": 226.2933349609375
+    },
+    {
+      "feature": "scheduled_dep_hour",
+      "gain": 184.4950714111328
+    },
+    {
+      "feature": "dest_is_freezing",
+      "gain": 154.12139892578125
+    },
+    {
+      "feature": "origin_wind_speed_kmh",
+      "gain": 135.1327667236328
+    },
+    {
+      "feature": "origin_JFK",
+      "gain": 133.760009765625
+    },
+    {
+      "feature": "origin_DFW",
+      "gain": 125.81890869140625
+    },
+    {
+      "feature": "dest_BOS",
+      "gain": 122.23091888427734
+    },
+    {
+      "feature": "distance_miles",
+      "gain": 121.14601135253906
+    },
+    {
+      "feature": "dest_is_adverse",
+      "gain": 116.84037017822266
+    },
+    {
+      "feature": "dest_temp_c",
+      "gain": 114.47026062011719
+    }
+  ],
+  "top_gain_delay120": [
+    {
+      "feature": "day_of_month",
+      "gain": 203.17904663085938
+    },
+    {
+      "feature": "origin_is_adverse",
+      "gain": 156.37130737304688
+    },
+    {
+      "feature": "day_of_week",
+      "gain": 132.7190704345703
+    },
+    {
+      "feature": "origin_DFW",
+      "gain": 115.2681655883789
+    },
+    {
+      "feature": "origin_prior_delay120_rate",
+      "gain": 101.56160736083984
+    },
+    {
+      "feature": "dest_DFW",
+      "gain": 97.1961669921875
+    },
+    {
+      "feature": "carrier_prior_cancel_rate",
+      "gain": 85.39143371582031
+    },
+    {
+      "feature": "dest_is_adverse",
+      "gain": 84.8519287109375
+    },
+    {
+      "feature": "dest_prior_delay120_rate",
+      "gain": 79.4521713256836
+    },
+    {
+      "feature": "has_origin_weather",
+      "gain": 77.64208984375
+    },
+    {
+      "feature": "origin_other",
+      "gain": 72.41158294677734
+    },
+    {
+      "feature": "carrier_prior_delay120_rate",
+      "gain": 71.45942687988281
+    },
+    {
+      "feature": "dest_IAH",
+      "gain": 71.24469757080078
+    },
+    {
+      "feature": "dest_other",
+      "gain": 60.689369201660156
+    },
+    {
+      "feature": "dest_wind_speed_kmh",
+      "gain": 57.742149353027344
+    }
+  ],
+  "top_shap_cancellation": [
+    {
+      "feature": "day_of_week",
+      "mean_abs_shap": 0.025151042267680168
+    },
+    {
+      "feature": "day_of_month",
+      "mean_abs_shap": 0.022741328924894333
+    },
+    {
+      "feature": "origin_prior_cancel_rate",
+      "mean_abs_shap": 0.01786404848098755
+    },
+    {
+      "feature": "dest_prior_cancel_rate",
+      "mean_abs_shap": 0.015383436344563961
+    },
+    {
+      "feature": "scheduled_dep_hour",
+      "mean_abs_shap": 0.002658064942806959
+    },
+    {
+      "feature": "dest_is_adverse",
+      "mean_abs_shap": 0.0018719106446951628
+    },
+    {
+      "feature": "origin_temp_c",
+      "mean_abs_shap": 0.0009300849633291364
+    },
+    {
+      "feature": "dest_temp_c",
+      "mean_abs_shap": 0.0006422551232390106
+    },
+    {
+      "feature": "scheduled_arr_hour",
+      "mean_abs_shap": 0.0003358522371854633
+    },
+    {
+      "feature": "dest_PHX",
+      "mean_abs_shap": 8.558015542803332e-05
+    },
+    {
+      "feature": "scheduled_elapsed_minutes",
+      "mean_abs_shap": 0.0
+    },
+    {
+      "feature": "distance_miles",
+      "mean_abs_shap": 0.0
+    },
+    {
+      "feature": "is_dep_morning_peak",
+      "mean_abs_shap": 0.0
+    },
+    {
+      "feature": "is_dep_evening_peak",
+      "mean_abs_shap": 0.0
+    },
+    {
+      "feature": "is_dep_night",
+      "mean_abs_shap": 0.0
+    }
+  ]
+}
