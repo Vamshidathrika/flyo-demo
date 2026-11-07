@@ -4,7 +4,7 @@ let currentActiveView = "monitor";
 
 function switchSectionView(tabName) {
     currentActiveView = tabName;
-    const tabs = ["monitor", "ananya", "msg", "logs", "monitoring"];
+    const tabs = ["monitor", "ananya", "msg", "logs", "monitoring", "ops"];
     tabs.forEach(t => {
         const view = document.getElementById(`view-${t}`);
         const btn = document.getElementById(`tab-${t}`);
@@ -35,6 +35,8 @@ function switchSectionView(tabName) {
         fetchBookings();
     } else if (tabName === "monitoring") {
         fetchMonitoringData();
+    } else if (tabName === "ops") {
+        fetchOpsData();
     }
 }
 
@@ -55,6 +57,51 @@ async function syncDashboard() {
     await fetchOtpStatus();
     if (currentActiveView === "monitoring") {
         await fetchMonitoringData(true);
+    } else if (currentActiveView === "ops") {
+        await fetchOpsData(true);
+    }
+}
+
+async function fetchOpsData(silent = false) {
+    try {
+        const res = await fetch("/api/cases/operations-summary");
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const activeElem = document.getElementById("ops-active-count");
+        const manualElem = document.getElementById("ops-manual-count");
+        const failedElem = document.getElementById("ops-failed-count");
+        const resolvedElem = document.getElementById("ops-resolved-count");
+
+        if (activeElem) activeElem.textContent = data.activeDisruptionsCount || 0;
+        if (manualElem) manualElem.textContent = data.manualInterventionCount || 0;
+        if (failedElem) failedElem.textContent = data.failedEscalationsCount || 0;
+        if (resolvedElem) resolvedElem.textContent = data.resolvedDoneCount || 0;
+
+        const tbody = document.getElementById("ops-intervention-tbody");
+        if (tbody) {
+            const cases = data.attentionRequiredCases || [];
+            if (cases.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #16a34a; padding: 1.5rem; font-weight: 600;">✔ Zero pending manual interventions. All automated sagas operating normally.</td></tr>`;
+            } else {
+                tbody.innerHTML = cases.map(c => `
+                    <tr style="background: ${c.state === 'FAILED_ESCALATED' ? '#fef2f2' : '#fffbeb'};">
+                        <td><strong>${c.id}</strong></td>
+                        <td>${c.passengerName || 'Passenger'}</td>
+                        <td><span class="badge ${c.state === 'FAILED_ESCALATED' ? 'badge-failed' : 'badge-warning'}">${c.state}</span></td>
+                        <td style="color: #b91c1c; font-family: monospace; font-size: 0.75rem;">${c.error || 'Provider Ambiguity'}</td>
+                        <td style="font-size: 0.75rem;">${c.manualNextStep || 'Inspect airline portal before retry.'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" onclick="fetchCase('${c.id}'); switchSectionView('ananya');" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                Inspect Case →
+                            </button>
+                        </td>
+                    </tr>
+                `).join("");
+            }
+        }
+    } catch (err) {
+        if (!silent) console.error("Error fetching ops data:", err);
     }
 }
 

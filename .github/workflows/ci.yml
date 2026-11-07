@@ -2,7 +2,7 @@ name: Flyo Production CI Pipeline
 
 on:
   push:
-    branches: [ main, develop, "release/*" ]
+    branches: [ main, develop, "release/*", "feature/*" ]
   pull_request:
     branches: [ main, develop ]
 
@@ -21,9 +21,9 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
 
     steps:
       - name: Checkout Code
@@ -36,6 +36,25 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Set up Python 3.11 for Live ML Integration
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ML Microservice Dependencies & Start Daemon
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ml/requirements.txt
+          nohup python -m uvicorn ml.service.main:app --host 0.0.0.0 --port 8000 > /tmp/ml-service.log 2>&1 &
+          for i in {1..20}; do
+            if curl -s http://localhost:8000/health/live | grep -q "status"; then
+              echo "ML service started and verified healthy on :8000"
+              break
+            fi
+            echo "Waiting for ML service on :8000..."
+            sleep 1
+          done
+
       - name: Compile and Run All Unit & Integration Tests
         run: |
           cd flyo-rescue-demo/backend
@@ -45,6 +64,9 @@ jobs:
           POSTGRES_URL: jdbc:postgresql://localhost:5432/flyodb
           POSTGRES_USER: flyo_admin
           POSTGRES_PASSWORD: flyo_test_password
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/flyodb
+          SPRING_DATASOURCE_USERNAME: flyo_admin
+          SPRING_DATASOURCE_PASSWORD: flyo_test_password
 
   frontend-verification:
     name: Frontend Lint & Production Asset Build
@@ -58,12 +80,12 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: flyo-rescue-demo/frontend/package.json
+          cache-dependency-path: flyo-rescue-demo/frontend/package-lock.json
 
       - name: Install Frontend Dependencies
         run: |
           cd flyo-rescue-demo/frontend
-          npm ci
+          npm ci || npm install
 
       - name: Run Frontend Tests
         run: |
@@ -78,6 +100,8 @@ jobs:
   ml-verification:
     name: Machine Learning Disruption Predictor Tests
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -90,7 +114,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f ml/requirements.txt ]; then pip install -r ml/requirements.txt; else pip install scikit-learn numpy pydantic; fi
+          pip install -r ml/requirements.txt
 
       - name: Run ML Unit Tests
         run: |

@@ -30,9 +30,9 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @SpringBootTest
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:postgresql://localhost:5432/flyodb_prod_test",
-        "spring.datasource.username=nani",
-        "spring.datasource.password=",
+        "spring.datasource.url=${SPRING_DATASOURCE_URL:${POSTGRES_URL:jdbc:postgresql://localhost:5432/flyodb_prod_test}}",
+        "spring.datasource.username=${SPRING_DATASOURCE_USERNAME:${POSTGRES_USER:nani}}",
+        "spring.datasource.password=${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:}}",
         "spring.datasource.driver-class-name=org.postgresql.Driver",
         "spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect",
         "spring.jpa.hibernate.ddl-auto=validate",

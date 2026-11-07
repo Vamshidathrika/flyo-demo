@@ -29,6 +29,19 @@ public class LiveInferenceEndToEndIntegrationTest {
     @Autowired
     private FlightEvidenceReconciliationService reconciliationService;
 
+    @org.junit.jupiter.api.BeforeEach
+    void assumeMlServiceReachable() {
+        boolean reachable = false;
+        try {
+            java.net.Socket s = new java.net.Socket();
+            s.connect(new java.net.InetSocketAddress("localhost", 8000), 500);
+            s.close();
+            reachable = true;
+        } catch (Exception ignored) {
+        }
+        org.junit.jupiter.api.Assumptions.assumeTrue(reachable, "Live FastAPI ML microservice on port 8000 is not reachable; skipping live inference test");
+    }
+
     @Test
     @DisplayName("End-to-End Live: Complete chain Spring Boot -> Live FastAPI (:8000) produces real v2 predictions")
     void testLiveFastApiInferenceRoundtrip() {

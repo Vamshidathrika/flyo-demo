@@ -58,6 +58,9 @@
                     <button class="platform-tab-btn" id="tab-monitoring" onclick="switchSectionView('monitoring')">
                         ML Observability <span class="tab-badge" id="tab-ml-status-badge" style="background: #0284c7; color: white;">v2</span>
                     </button>
+                    <button class="platform-tab-btn" id="tab-ops" onclick="switchSectionView('ops')">
+                        Operations Control <span class="tab-badge" id="tab-ops-badge" style="background: #059669; color: white;">Live</span>
+                    </button>
                 </nav>
 
                 <!-- SECTION 1: TRIP MONITOR & BOOKINGS -->
@@ -442,7 +445,7 @@
                                 </div>
 
                                 <div class="options-list" id="options-list">
-                                    <!-- Options injected dynamically by app.9d05ba06e6.min.js -->
+                                    <!-- Options injected dynamically by app.3e0037d01e.min.js -->
                                 </div>
                             </div>
 
@@ -801,6 +804,125 @@
                                     <strong style="color: #0f172a;">Storage Engine:</strong> SQLite WAL mode (zero PII logged)<br>
                                     <strong style="color: #0f172a;">Circuit Breaker:</strong> 3 consecutive failures threshold &middot; 5,000ms cooldown
                                 </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- SECTION 6: OPERATIONS CONTROL CENTER -->
+                <div class="section-view" id="view-ops" style="display: none;">
+                    <!-- Operations Header Banner -->
+                    <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                <span style="background: #0f172a; color: white; font-size: 0.72rem; font-weight: 750; padding: 0.2rem 0.55rem; border-radius: 4px; letter-spacing: 0.03em;">
+                                    STAGE 7 CONTROL
+                                </span>
+                                <div>
+                                    <h2 style="font-size: 1.15rem; font-weight: 750; color: #0f172a; margin: 0; line-height: 1.2;">
+                                        Enterprise Disruption Operations Control Center
+                                    </h2>
+                                    <p style="font-size: 0.8rem; color: #475569; margin: 0.2rem 0 0 0;">
+                                        Live Provider Health, Distributed Saga Monitoring, Manual Intervention Desk &amp; Financial Ledger
+                                    </p>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary btn-sm" onclick="fetchOpsData(false)" style="font-size: 0.75rem;">
+                                    ⟳ Refresh Ops
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Operational Summary KPI Cards -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div class="summary-card">
+                            <span class="summary-label">Active Disruption Cases</span>
+                            <span class="summary-value" id="ops-active-count">0</span>
+                        </div>
+                        <div class="summary-card" style="border-left: 4px solid #f59e0b;">
+                            <span class="summary-label">Manual Intervention Desk</span>
+                            <span class="summary-value" id="ops-manual-count" style="color: #b45309;">0</span>
+                        </div>
+                        <div class="summary-card" style="border-left: 4px solid #ef4444;">
+                            <span class="summary-label">Failed / Escalated Sagas</span>
+                            <span class="summary-value" id="ops-failed-count" style="color: #dc2626;">0</span>
+                        </div>
+                        <div class="summary-card" style="border-left: 4px solid #10b981;">
+                            <span class="summary-label">Successfully Resolved</span>
+                            <span class="summary-value" id="ops-resolved-count" style="color: #059669;">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Provider Availability Matrix -->
+                    <section class="card" style="margin-bottom: 1.5rem;">
+                        <div class="card-header" style="padding: 0.85rem 1rem;">
+                            <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Airline, Messaging &amp; Platform Provider Health</h3>
+                        </div>
+                        <div style="padding: 1rem;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem;" id="ops-provider-grid">
+                                <div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                        <strong style="color: #0f172a; font-size: 0.85rem;">Amadeus GDS Portal</strong>
+                                        <span class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.7rem;">SANDBOX</span>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: #64748b;">Circuit Breaker: CLOSED (Healthy)</div>
+                                </div>
+                                <div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                        <strong style="color: #0f172a; font-size: 0.85rem;">Meta WhatsApp Cloud API</strong>
+                                        <span class="badge" style="background: #dcfce7; color: #166534; font-size: 0.7rem;">SANDBOX / SIGNED</span>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: #64748b;">HMAC-SHA256: ACTIVE</div>
+                                </div>
+                                <div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                        <strong style="color: #0f172a; font-size: 0.85rem;">Salesforce Service Cloud</strong>
+                                        <span class="badge" style="background: #f1f5f9; color: #475569; font-size: 0.7rem;">SANDBOX / IDEMPOTENT</span>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: #64748b;">Upsert: External ID Mapping</div>
+                                </div>
+                                <div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                        <strong style="color: #0f172a; font-size: 0.85rem;">PostgreSQL 16 &amp; Redis</strong>
+                                        <span class="badge" style="background: #dcfce7; color: #166534; font-size: 0.7rem;">LIVE</span>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: #64748b;">Optimistic Locking: ACTIVE (v9)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Manual Intervention & Escalated Cases Queue -->
+                    <section class="card" style="margin-bottom: 1.5rem;">
+                        <div class="card-header" style="padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Ticketing Desk Manual Intervention Queue</h3>
+                                <p class="section-desc" style="font-size: 0.75rem; margin: 0.15rem 0 0;">Cases requiring human verification after external timeouts or ambiguous provider outcomes</p>
+                            </div>
+                        </div>
+                        <div style="padding: 0.5rem 1rem 1rem;">
+                            <div class="table-container">
+                                <table class="data-table" style="font-size: 0.8rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Case ID</th>
+                                            <th>Passenger</th>
+                                            <th>State</th>
+                                            <th>Ambiguity / Failure Reason</th>
+                                            <th>Manual Desk Action</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ops-intervention-tbody">
+                                        <tr>
+                                            <td colspan="6" class="loading-state" style="text-align: center; color: #64748b; padding: 1.5rem;">
+                                                Loading manual intervention cases...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </section>
