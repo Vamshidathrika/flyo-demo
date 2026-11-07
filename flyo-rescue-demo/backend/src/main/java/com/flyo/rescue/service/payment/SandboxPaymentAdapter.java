@@ -16,8 +16,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Production-ready Sandbox Payment Adapter with strict double-entry ledgering,
+ * Production-ready Sandbox Payment Adapter with strict tokenization,
  * masked PANs, and airline MCC (3000-3350) spending limits.
+ *
+ * Adheres to PCI-DSS v4.0 Requirement 3.2: Never persists CVV/CVC.
  */
 @Component
 @Primary
@@ -39,7 +41,7 @@ public class SandboxPaymentAdapter implements PaymentGatewayAdapter {
 
     @Override
     public String getProviderName() {
-        return "Flyo Sandbox Treasury / RazorpayX Virtual Gateway";
+        return "Flyo Sandbox Treasury / Tokenized Virtual Gateway";
     }
 
     @Override
@@ -56,23 +58,25 @@ public class SandboxPaymentAdapter implements PaymentGatewayAdapter {
         }
 
         String cardId = "VCC-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        int randMid = 1000 + (int)(Math.random() * 8999);
+        String cardTokenId = "tok_sandbox_" + UUID.randomUUID().toString().replace("-", "");
         int randLast = 1000 + (int)(Math.random() * 8999);
-        String cardNumber = String.format("453298%04d%04d", randMid, randLast);
+        String lastFour = String.format("%04d", randLast);
         String expiry = "12/28";
-        String cvv = String.format("%03d", 100 + (int)(Math.random() * 899));
+
         String cardHolder = (passengerName != null && !passengerName.isBlank())
                 ? "FLYO CORP / " + passengerName.toUpperCase()
                 : "FLYO CORPORATE TRAVEL DESK";
 
+        // PCI Compliance: Never generate, store, or persist CVV
         VirtualCard card = new VirtualCard(
                 cardId,
                 caseId,
                 optionId,
-                cardNumber,
+                cardTokenId,
+                lastFour,
+                "Mastercard",
                 cardHolder,
                 expiry,
-                cvv,
                 amount,
                 "INR",
                 "ISSUED",
@@ -82,15 +86,15 @@ public class SandboxPaymentAdapter implements PaymentGatewayAdapter {
 
         VirtualCard saved = cardRepository.save(card);
 
-        log.info("[Payment Sandbox] Issued VCC {} for Case {} (Option {}), Amount: ₹{}",
-                cardId, caseId, optionId, amount);
+        log.info("[Payment Sandbox] Issued tokenized VCC {} (Token: {}, Last4: {}) for Case {}, Amount: ₹{}",
+                cardId, cardTokenId, lastFour, caseId, amount);
 
         auditService.logEvent(
                 caseId,
                 "VCC_ISSUED",
                 "Flyo Treasury Gateway",
-                String.format("Single-use Corporate Virtual Card %s issued for ₹%,d (Card: %s, Exp: %s). Locked to Airline MCC.",
-                        cardId, amount, saved.getMaskedCardNumber(), expiry)
+                String.format("Single-use Corporate Virtual Card %s issued for ₹%,d (Card: %s, Exp: %s, Token: %s). Locked to Airline MCC.",
+                        cardId, amount, saved.getMaskedCardNumber(), expiry, cardTokenId)
         );
 
         return saved;
@@ -134,5 +138,23 @@ public class SandboxPaymentAdapter implements PaymentGatewayAdapter {
         );
 
         return saved;
+    }
+
+    @Override
+    public boolean voidAuthorization(String caseId, String virtualCardId) {
+        log.info("[Payment Sandbox] Voiding authorization for VCC {} on Case {}", virtualCardId, caseId);
+        if (virtualCardId != null) {
+            cardRepository.findById(virtualCardId).ifPresent(c -> {
+                c.setStatus("VOIDED");
+                cardRepository.save(c);
+            });
+        }
+        auditService.logEvent(
+                caseId,
+                "PAYMENT_VOIDED",
+                "Flyo Treasury Gateway",
+                String.format("Authorization on VCC %s successfully voided / cancelled as part of saga compensation.", virtualCardId)
+        );
+        return true;
     }
 }

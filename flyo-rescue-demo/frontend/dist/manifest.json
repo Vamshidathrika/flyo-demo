@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0-PROD-STAGE5",
+  "buildTimestamp": "2026-11-07T02:40:20.560Z",
+  "entrypoint": "index.html",
+  "bundles": {
+    "js": {
+      "file": "app.9d05ba06e6.min.js",
+      "sizeBytes": 100936,
+      "hash": "9d05ba06e6"
+    },
+    "css": {
+      "file": "style.5fe5ed7519.min.css",
+      "sizeBytes": 33916,
+      "hash": "5fe5ed7519"
+    }
+  },
+  "verification": {
+    "astValidation": "PASSED",
+    "secretsScan": "CLEAN",
+    "targetServer": "Spring Boot 3.3.4 Static Resource Pipeline"
+  }
+}

@@ -25,8 +25,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.springframework.security.test.context.support.WithMockUser;
+
 @SpringBootTest
 @AutoConfigureMockMvc
+@WithMockUser(username = "admin", roles = {"ADMIN", "SUPERVISOR", "OPERATOR"})
 public class ApprovalGateEdgeTest {
 
     @Autowired
@@ -111,7 +114,7 @@ public class ApprovalGateEdgeTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"optionId\": \"O2\", \"approvedBy\": \"Flyo Operator\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.state", is("AWAITING_APPROVAL")))
+                .andExpect(jsonPath("$.state", is("APPROVED")))
                 .andExpect(jsonPath("$.approvedOptionId", is("O2")));
 
         // Duplicate approval
@@ -119,9 +122,18 @@ public class ApprovalGateEdgeTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"optionId\": \"O2\", \"approvedBy\": \"Flyo Operator\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.state", is("AWAITING_APPROVAL")))
+                .andExpect(jsonPath("$.state", is("APPROVED")))
                 .andExpect(jsonPath("$.approvedOptionId", is("O2")));
     }
+
+    @Autowired
+    private com.flyo.rescue.service.saga.RebookingSagaCoordinator sagaCoordinator;
+
+    @Autowired
+    private com.flyo.rescue.service.CaseService caseService;
+
+    @Autowired
+    private com.flyo.rescue.service.CaseStateMachineService stateMachineService;
 
     @Test
     @DisplayName("Edge Case 4: Deterministic 120-minute connection threshold boundary (119m vs 120m)")
@@ -141,5 +153,88 @@ public class ApprovalGateEdgeTest {
         assertFalse(ranked.get(1).isSavesConnection());
         assertEquals(2, ranked.get(1).getRank());
         assertTrue(ranked.get(1).getReason().contains("minimum safe threshold is 120 minutes"));
+    }
+
+    @Test
+    @DisplayName("Approval Gate 5: Case in AWAITING_APPROVAL state must NEVER authorize rebooking or saga initiation")
+    void testAwaitingApprovalStateCannotRebookOrStartSaga() {
+        caseService.simulateCancellation("B1", "CANCELLED");
+        caseService.generateAndRankOptions("C1");
+
+        // Manually place in AWAITING_APPROVAL (unapproved queue)
+        com.flyo.rescue.model.RescueCase c = rescueCaseRepository.findById("C1").orElseThrow();
+        stateMachineService.transition(c, com.flyo.rescue.service.CaseStateMachineService.STATE_AWAITING_APPROVAL,
+                "Flyo Operator", "Option submitted for supervisor review");
+        rescueCaseRepository.save(c);
+
+        // Attempting to rebook must fail
+        assertThrows(com.flyo.rescue.exception.ApprovalRequiredException.class, () -> caseService.rebookCase("C1"));
+
+        // Attempting to start saga must fail
+        assertThrows(com.flyo.rescue.exception.ApprovalRequiredException.class, () ->
+                sagaCoordinator.initiateRebookingSaga("C1", "O2", "Flyo Supervisor"));
+    }
+
+    @Test
+    @DisplayName("Approval Gate 6: Expired human approval (> 30 minutes old) must be strictly rejected")
+    void testExpiredApprovalCannotStartSaga() {
+        caseService.simulateCancellation("B1", "CANCELLED");
+        caseService.generateAndRankOptions("C1");
+        caseService.approveOption("C1", "O2", "Supervisor Dave");
+
+        // Artificially age approval timestamp to 45 minutes ago
+        com.flyo.rescue.model.RescueCase c = rescueCaseRepository.findById("C1").orElseThrow();
+        c.setApprovedAt(java.time.LocalDateTime.now().minusMinutes(45));
+        rescueCaseRepository.save(c);
+
+        assertThrows(com.flyo.rescue.exception.ApprovalRequiredException.class, () ->
+                sagaCoordinator.initiateRebookingSaga("C1", "O2", "Supervisor Dave"));
+    }
+
+    @Test
+    @DisplayName("Approval Gate 7: Option mismatch between approved option and requested saga option must be rejected")
+    void testMismatchedOptionCannotStartSaga() {
+        caseService.simulateCancellation("B1", "CANCELLED");
+        caseService.generateAndRankOptions("C1");
+        caseService.approveOption("C1", "O1", "Supervisor Dave"); // Approved O1
+
+        // Attempt to dispatch O2
+        assertThrows(com.flyo.rescue.exception.ApprovalRequiredException.class, () ->
+                sagaCoordinator.initiateRebookingSaga("C1", "O2", "Supervisor Dave"));
+    }
+
+    @Test
+    @DisplayName("Approval Gate 8: Rejection or Escalation immediately revokes prior approval")
+    void testRevokedApprovalCannotStartSaga() {
+        caseService.simulateCancellation("B1", "CANCELLED");
+        caseService.generateAndRankOptions("C1");
+        caseService.approveOption("C1", "O2", "Supervisor Dave");
+
+        // Reject / escalate case
+        caseService.rejectCase("C1", "Passenger requested full cash refund", "Supervisor Dave");
+
+        com.flyo.rescue.model.RescueCase c = rescueCaseRepository.findById("C1").orElseThrow();
+        assertEquals("ESCALATED", c.getState());
+        assertNull(c.getApprovedOptionId());
+        assertNull(c.getApprovedBy());
+        assertNull(c.getApprovedAt());
+
+        assertThrows(com.flyo.rescue.exception.ApprovalRequiredException.class, () ->
+                sagaCoordinator.initiateRebookingSaga("C1", "O2", "Supervisor Dave"));
+    }
+
+    @Test
+    @DisplayName("Approval Gate 9: Anonymous or blank approver identity fails closed")
+    void testAnonymousApproverCannotStartSaga() {
+        caseService.simulateCancellation("B1", "CANCELLED");
+        caseService.generateAndRankOptions("C1");
+        caseService.approveOption("C1", "O2", "Supervisor Dave");
+
+        com.flyo.rescue.model.RescueCase c = rescueCaseRepository.findById("C1").orElseThrow();
+        c.setApprovedBy("anonymousUser");
+        rescueCaseRepository.save(c);
+
+        assertThrows(com.flyo.rescue.exception.ApprovalRequiredException.class, () ->
+                sagaCoordinator.initiateRebookingSaga("C1", "O2", "anonymousUser"));
     }
 }

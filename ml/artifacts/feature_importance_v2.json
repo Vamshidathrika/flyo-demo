@@ -1,0 +1,64 @@
+{
+  "top_gain_cancellation": [
+    {
+      "feature": "route_prior_cancel_rate",
+      "gain": 2307.846435546875
+    },
+    {
+      "feature": "day_of_month",
+      "gain": 926.6407470703125
+    },
+    {
+      "feature": "carrier_DL",
+      "gain": 822.9728393554688
+    },
+    {
+      "feature": "carrier_AS",
+      "gain": 774.6650390625
+    },
+    {
+      "feature": "carrier_UA",
+      "gain": 570.3392333984375
+    },
+    {
+      "feature": "carrier_prior_cancel_rate",
+      "gain": 525.6450805664062
+    },
+    {
+      "feature": "day_of_week",
+      "gain": 248.17904663085938
+    },
+    {
+      "feature": "carrier_B6",
+      "gain": 201.78533935546875
+    },
+    {
+      "feature": "dest_BOS",
+      "gain": 198.98440551757812
+    },
+    {
+      "feature": "origin_prior_cancel_rate",
+      "gain": 183.67031860351562
+    },
+    {
+      "feature": "carrier_prior_mean_delay",
+      "gain": 171.3972625732422
+    },
+    {
+      "feature": "origin_BOS",
+      "gain": 162.44590759277344
+    },
+    {
+      "feature": "dest_prior_cancel_rate",
+      "gain": 162.25888061523438
+    },
+    {
+      "feature": "origin_SEA",
+      "gain": 162.03167724609375
+    },
+    {
+      "feature": "dest_SEA",
+      "gain": 141.98309326171875
+    }
+  ]
+}

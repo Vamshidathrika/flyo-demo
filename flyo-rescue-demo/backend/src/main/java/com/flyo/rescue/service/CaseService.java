@@ -29,6 +29,7 @@ public class CaseService {
     private final MessageService messageService;
     private final PaymentSettlementService paymentSettlementService;
     private final CaseStateMachineService stateMachineService;
+    private final FlightEvidenceReconciliationService reconciliationService;
 
     public CaseService(RescueCaseRepository caseRepository,
                        BookingRepository bookingRepository,
@@ -39,7 +40,8 @@ public class CaseService {
                        AuditService auditService,
                        MessageService messageService,
                        PaymentSettlementService paymentSettlementService,
-                       CaseStateMachineService stateMachineService) {
+                       CaseStateMachineService stateMachineService,
+                       FlightEvidenceReconciliationService reconciliationService) {
         this.caseRepository = caseRepository;
         this.bookingRepository = bookingRepository;
         this.optionRepository = optionRepository;
@@ -50,14 +52,37 @@ public class CaseService {
         this.messageService = messageService;
         this.paymentSettlementService = paymentSettlementService;
         this.stateMachineService = stateMachineService;
+        this.reconciliationService = reconciliationService;
+    }
+
+    private boolean isGlobalAdmin() {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof com.flyo.rescue.security.FlyoUserPrincipal p) {
+            return p.getAuthorizedTenants().contains("*");
+        }
+        return false;
     }
 
     public List<RescueCase> getAllCases() {
-        return caseRepository.findAll();
+        String tenantId = com.flyo.rescue.security.TenantContext.getTenantId();
+        if (isGlobalAdmin()) {
+            return caseRepository.findAll();
+        }
+        return caseRepository.findByTenantId(tenantId);
     }
 
     public Optional<RescueCase> getCaseById(String id) {
-        return caseRepository.findById(id);
+        Optional<RescueCase> caseOpt = caseRepository.findById(id);
+        if (caseOpt.isPresent()) {
+            String tenantId = com.flyo.rescue.security.TenantContext.getTenantId();
+            if (!isGlobalAdmin() && !tenantId.equals(caseOpt.get().getTenantId())) {
+                org.slf4j.LoggerFactory.getLogger(CaseService.class)
+                        .warn("[Tenant Security] Blocked cross-tenant case access: case {} belongs to {}, caller tenant is {}",
+                                id, caseOpt.get().getTenantId(), tenantId);
+                return Optional.empty();
+            }
+        }
+        return caseOpt;
     }
 
     @Transactional
@@ -69,7 +94,7 @@ public class CaseService {
         bookingRepository.save(booking);
 
         // Idempotency guard: Return existing active case if present and not terminal
-        Optional<RescueCase> existingOpt = caseRepository.findByBookingId(bookingId);
+        Optional<RescueCase> existingOpt = caseRepository.findFirstByBookingIdOrderByCreatedAtDesc(bookingId);
         if (existingOpt.isPresent()) {
             RescueCase existing = existingOpt.get();
             boolean isTerminal = "DONE".equals(existing.getState())
@@ -120,6 +145,7 @@ public class CaseService {
         );
 
         rescueCase.setState("DETECTED");
+        rescueCase.setTenantId(com.flyo.rescue.security.TenantContext.getTenantId());
         rescueCase.setCancelledSegment(cancelledSegment);
         rescueCase.setFlight(booking.getFlight());
         rescueCase.setImpact(impactText);
@@ -132,6 +158,22 @@ public class CaseService {
         rescueCase.setError(null);
         rescueCase.setManualNextStep(null);
 
+        // Multi-Source Evidence Reconciliation (Radar + Open-Meteo Weather + News Intelligence)
+        String dep = "HYD";
+        String arr = "DEL";
+        if (booking.getRoute() != null && booking.getRoute().contains("→")) {
+            String[] parts = booking.getRoute().split("→");
+            dep = parts[0].trim();
+            arr = parts[1].trim();
+        }
+        com.flyo.rescue.dto.ReconciledFlightEvidence evidence = reconciliationService.reconcileDisruption(
+                booking.getFlight(), dep, arr, type, 0
+        );
+
+        rescueCase.setReconciledConfidence(evidence.getConfidencePercent());
+        rescueCase.setDisruptionEvidence(evidence.getReconciledReason());
+        rescueCase.setWeatherSummary(evidence.getWeatherSummary());
+
         RescueCase saved = caseRepository.save(rescueCase);
 
         // Audit Trail: Disruption Detected
@@ -141,6 +183,15 @@ public class CaseService {
                 "Flyo Engine",
                 String.format("Flight %s %s cancelled. Disruption detected for passenger %s (PNR %s).",
                         booking.getFlight(), booking.getRoute(), booking.getPassengerName(), booking.getPnr())
+        );
+
+        // Audit Trail: Evidence Reconciled
+        auditService.logEvent(
+                caseId,
+                "EVIDENCE_RECONCILED",
+                "Flyo Reconciliation Engine",
+                String.format("Multi-source disruption verified with %d%% confidence (%s). Weather: %s.",
+                        evidence.getConfidencePercent(), evidence.getConfidenceLevel(), evidence.getWeatherSummary())
         );
 
         // WhatsApp Passenger Care Stage 1: Immediate Proactive Reassurance Notice
@@ -185,8 +236,13 @@ public class CaseService {
         optionRepository.deleteAll(optionRepository.findByCaseIdOrderByRankAsc(caseId));
         List<RebookOption> savedOptions = optionRepository.saveAll(rankedOptions);
 
-        // Transition state from DETECTED to OPTIONS_READY
-        stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_OPTIONS_READY, "Flyo Ranking Engine", "Options generated and ranked");
+        // Invalidate and revoke any previous approval upon re-ranking (material change to itinerary options)
+        rescueCase.setApprovedOptionId(null);
+        rescueCase.setApprovedBy(null);
+        rescueCase.setApprovedAt(null);
+
+        // Transition state to OPTIONS_READY
+        stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_OPTIONS_READY, "Flyo Ranking Engine", "Options generated and ranked. Prior approvals revoked.");
         caseRepository.save(rescueCase);
 
         RebookOption bestOption = savedOptions.isEmpty() ? null : savedOptions.get(0);
@@ -242,10 +298,15 @@ public class CaseService {
             throw new IllegalStateTransitionException("409 Conflict: Case failed and was escalated. Cannot approve without reset.");
         }
 
-        // Idempotency guard: If already approved with the same option, return existing case without duplicate audit or card issuance
-        if ("AWAITING_APPROVAL".equals(rescueCase.getState())
-                && optionId != null && optionId.equals(rescueCase.getApprovedOptionId())) {
-            return rescueCase;
+        // Idempotency & Conflict Guard: If already approved
+        if (CaseStateMachineService.STATE_APPROVED.equals(rescueCase.getState())) {
+            if (optionId != null && (optionId.equals(rescueCase.getApprovedOptionId())
+                    || (rescueCase.getApprovedOptionId() != null && rescueCase.getApprovedOptionId().endsWith("-" + optionId)))) {
+                return rescueCase;
+            }
+            throw new IllegalStateTransitionException(String.format(
+                    "409 Conflict: Case %s is already approved for option %s. Conflicting approval for option %s is rejected.",
+                    caseId, rescueCase.getApprovedOptionId(), optionId));
         }
 
         RebookOption option = optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
@@ -266,7 +327,7 @@ public class CaseService {
         rescueCase.setApprovedOptionId(option.getId());
         rescueCase.setApprovedBy(approvedBy != null && !approvedBy.isBlank() ? approvedBy : "Flyo Operator");
         rescueCase.setApprovedAt(LocalDateTime.now());
-        stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_AWAITING_APPROVAL, rescueCase.getApprovedBy(),
+        stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_APPROVED, rescueCase.getApprovedBy(),
                 String.format("Option %s (%s) approved for rebooking.", option.getId(), option.getFlight()));
         rescueCase.setError(null);
         rescueCase.setManualNextStep(null);
@@ -326,17 +387,21 @@ public class CaseService {
         RescueCase rescueCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
+        // Strict Idempotency: If already rebooked with confirmed PNR, return the existing result directly
+        if ("DONE".equals(rescueCase.getState()) && rescueCase.getNewPnr() != null && !rescueCase.getNewPnr().isBlank()) {
+            return rescueCase;
+        }
+
+        if (!CaseStateMachineService.STATE_APPROVED.equals(rescueCase.getState())) {
+            throw new ApprovalRequiredException("403 Forbidden: Rebooking requires prior explicit human approval in APPROVED state. Current state: " + rescueCase.getState());
+        }
+
         if (rescueCase.getApprovedOptionId() == null || rescueCase.getApprovedOptionId().isBlank()) {
             throw new ApprovalRequiredException("403 Forbidden: Approval required before rebooking. No approved option exists for case " + caseId);
         }
 
         if ("ESCALATED".equals(rescueCase.getState())) {
             throw new ApprovalRequiredException("403 Forbidden: Case is escalated. Cannot rebook without a new approved option.");
-        }
-
-        // Strict Idempotency: If already rebooked with confirmed PNR, return the existing result directly
-        if ("DONE".equals(rescueCase.getState()) && rescueCase.getNewPnr() != null && !rescueCase.getNewPnr().isBlank()) {
-            return rescueCase;
         }
 
         RebookOption approvedOption = optionRepository.findById(rescueCase.getApprovedOptionId())
@@ -372,9 +437,9 @@ public class CaseService {
                     approvedOption.getId(),
                     approvedOption.getFlight(),
                     rescueCase.getPassengerName(),
-                    vcc.getCardNumber(),
+                    vcc.getCardTokenId(),
                     vcc.getExpiry(),
-                    vcc.getCvv(),
+                    "",
                     vcc.getAmount()
             );
         }

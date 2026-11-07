@@ -33,8 +33,11 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.springframework.security.test.context.support.WithMockUser;
+
 @SpringBootTest
 @AutoConfigureMockMvc
+@WithMockUser(username = "admin", roles = {"ADMIN", "SUPERVISOR", "OPERATOR"})
 public class PaymentSettlementTest {
 
     @Autowired
@@ -97,7 +100,7 @@ public class PaymentSettlementTest {
         // 3. Approve Option O2 (+₹4,200 extra cost)
         caseService.approveOption("C1", "O2", "Flyo Finance Desk");
 
-        // 4. Verify VCC was generated and stored
+        // 4. Verify VCC was generated and stored with PCI-compliant tokenization
         Optional<VirtualCard> cardOpt = paymentService.getActiveCardForCase("C1");
         assertTrue(cardOpt.isPresent());
         VirtualCard card = cardOpt.get();
@@ -105,9 +108,12 @@ public class PaymentSettlementTest {
         assertEquals("O2", card.getOptionId());
         assertEquals(4200, card.getAmount());
         assertEquals("ISSUED", card.getStatus());
-        assertTrue(card.getCardNumber().startsWith("453298"));
+        assertNotNull(card.getCardTokenId());
+        assertTrue(card.getCardTokenId().startsWith("tok_sandbox_"));
+        assertNotNull(card.getLastFour());
+        assertEquals(4, card.getLastFour().length());
+        assertTrue(card.getMaskedCardNumber().startsWith("•••• •••• •••• "));
         assertEquals("12/28", card.getExpiry());
-        assertNotNull(card.getCvv());
     }
 
     @Test

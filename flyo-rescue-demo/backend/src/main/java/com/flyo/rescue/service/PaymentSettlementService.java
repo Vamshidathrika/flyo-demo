@@ -4,62 +4,193 @@ import com.flyo.rescue.model.PaymentTransaction;
 import com.flyo.rescue.model.VirtualCard;
 import com.flyo.rescue.repository.PaymentTransactionRepository;
 import com.flyo.rescue.repository.VirtualCardRepository;
+import com.flyo.rescue.security.TenantContext;
 import com.flyo.rescue.service.payment.PaymentGatewayAdapter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Optional;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Enterprise Payment Settlement, Virtual Corporate Card (VCC) Lifecycle & Financial Reconciliation Ledger.
+ *
+ * Enforces:
+ * - Clear separation of Authorization, Capture, Void, and Refund states
+ * - Idempotent payment execution with unique idempotency keys
+ * - Currency precision and ISO 4217 code validation
+ * - Dynamic tenant-isolated spending limits
+ * - Background automated financial reconciliation
+ * - Zero storage of CVV, masked PAN logs (PCI DSS hygiene)
+ */
 @Service
 public class PaymentSettlementService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentSettlementService.class);
+    private static final Set<String> SUPPORTED_CURRENCIES = Set.of("INR", "USD", "EUR", "GBP");
 
     private final PaymentGatewayAdapter paymentAdapter;
     private final VirtualCardRepository cardRepository;
     private final PaymentTransactionRepository transactionRepository;
 
-    // Configurable per-agency / corporate account spending limits
-    private final java.util.Map<String, Integer> agencySpendingLimits = new java.util.concurrent.ConcurrentHashMap<>();
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private FlyoMetricsService metricsService;
+
+    // Configurable per-tenant / corporate account spending limits
+    private final Map<String, Integer> tenantSpendingLimits = new ConcurrentHashMap<>();
 
     public PaymentSettlementService(PaymentGatewayAdapter paymentAdapter,
-                                   VirtualCardRepository cardRepository,
-                                   PaymentTransactionRepository transactionRepository) {
+                                    VirtualCardRepository cardRepository,
+                                    PaymentTransactionRepository transactionRepository) {
         this.paymentAdapter = paymentAdapter;
         this.cardRepository = cardRepository;
         this.transactionRepository = transactionRepository;
 
         // Initialize standard corporate agency spending tiers
-        agencySpendingLimits.put("Flyo Corporate", 100000);
-        agencySpendingLimits.put("Sri Sai Travels", 50000);
-        agencySpendingLimits.put("Default", 50000);
+        tenantSpendingLimits.put("Flyo Corporate", 100000);
+        tenantSpendingLimits.put("tenant_default", 50000);
+        tenantSpendingLimits.put("tenant_alpha", 75000);
+        tenantSpendingLimits.put("tenant_beta", 60000);
+        tenantSpendingLimits.put("Default", 50000);
     }
 
-    @Transactional
-    public VirtualCard issueVirtualCard(String caseId, String optionId, int amount, String passengerName) {
-        return paymentAdapter.issueVirtualCard(caseId, optionId, amount, passengerName);
+    private void validateCurrencyAndAmount(int amount, String currency) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Payment amount must be strictly positive (> 0). Given: " + amount);
+        }
+        if (currency == null || !SUPPORTED_CURRENCIES.contains(currency.toUpperCase())) {
+            throw new IllegalArgumentException("Unsupported currency: '" + currency + "'. Supported ISO 4217 currencies: " + SUPPORTED_CURRENCIES);
+        }
     }
 
+    // -------------------------------------------------------------------------
+    // 1. AUTHORIZATION PHASE
+    // -------------------------------------------------------------------------
     @Transactional
-    public PaymentTransaction recordSettlement(String caseId, String virtualCardId, int amount, String vendor) {
-        return paymentAdapter.recordSettlement(caseId, virtualCardId, amount, vendor);
-    }
+    public PaymentTransaction authorizePayment(String caseId, String optionId, int amount, String currency,
+                                               String passengerName, String idempotencyKey) {
+        validateCurrencyAndAmount(amount, currency);
+        String currentTenant = TenantContext.getTenantId();
 
-    @Transactional
-    public PaymentTransaction voidAuthorization(String caseId, String virtualCardId, int amount, String reason) {
-        String txnId = "VOID-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        String refId = "REV-" + java.util.UUID.randomUUID().toString().substring(0, 10).toUpperCase();
+        // 1. Idempotency Check
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<PaymentTransaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("[Payment Ledger] Deduplicated authorization request: transaction already exists for idempotencyKey '{}'", idempotencyKey);
+                return existing.get();
+            }
+        }
+
+        // 2. Tenant Spending Limit Check
+        if (!verifyTenantSpendingLimit(currentTenant, amount, currency)) {
+            throw new IllegalArgumentException(String.format("Requested authorization amount %s %d exceeds spending limit for tenant '%s'",
+                    currency, amount, currentTenant));
+        }
+
+        // 3. Issue Virtual Corporate Card
+        VirtualCard card = paymentAdapter.issueVirtualCard(caseId, optionId, amount, passengerName);
+
+        // 4. Record Authorization in Financial Ledger
+        String txnId = "AUTH-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String refId = "AUTHREF-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
 
         PaymentTransaction transaction = new PaymentTransaction(
                 txnId,
                 caseId,
+                currentTenant,
+                card.getId(),
+                amount,
+                currency.toUpperCase(),
+                paymentAdapter.getProviderName(),
+                PaymentTransaction.STATUS_AUTHORIZED,
+                refId,
+                LocalDateTime.now()
+        );
+        transaction.setIdempotencyKey(idempotencyKey);
+        transaction.setTransactionType(PaymentTransaction.TYPE_AUTH);
+        transaction.setReconciled(false);
+        transaction.setAuditMetadata("VCC Issued: " + card.getMaskedCardNumber() + " with limit " + currency + " " + amount);
+
+        return transactionRepository.save(transaction);
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. CAPTURE / SETTLEMENT PHASE
+    // -------------------------------------------------------------------------
+    @Transactional
+    public PaymentTransaction capturePayment(String caseId, String virtualCardId, int amount, String currency,
+                                             String referenceId, String idempotencyKey) {
+        validateCurrencyAndAmount(amount, currency);
+        String currentTenant = TenantContext.getTenantId();
+
+        // Idempotency Check
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<PaymentTransaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("[Payment Ledger] Deduplicated capture request: transaction already exists for idempotencyKey '{}'", idempotencyKey);
+                return existing.get();
+            }
+        }
+
+        String txnId = "CAP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String effectiveRef = referenceId != null && !referenceId.isBlank()
+                ? referenceId
+                : "CAPREF-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
+
+        PaymentTransaction transaction = new PaymentTransaction(
+                txnId,
+                caseId,
+                currentTenant,
+                virtualCardId,
+                amount,
+                currency.toUpperCase(),
+                paymentAdapter.getProviderName(),
+                PaymentTransaction.STATUS_CAPTURED,
+                effectiveRef,
+                LocalDateTime.now()
+        );
+        transaction.setIdempotencyKey(idempotencyKey);
+        transaction.setTransactionType(PaymentTransaction.TYPE_CAPTURE);
+        transaction.setReconciled(false);
+
+        PaymentTransaction saved = transactionRepository.save(transaction);
+
+        if (virtualCardId != null) {
+            cardRepository.findById(virtualCardId).ifPresent(c -> {
+                c.setStatus("SETTLED");
+                cardRepository.save(c);
+            });
+        }
+        return saved;
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. VOID & REFUND PHASE
+    // -------------------------------------------------------------------------
+    @Transactional
+    public PaymentTransaction voidAuthorization(String caseId, String virtualCardId, int amount, String reason) {
+        String txnId = "VOID-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String refId = "REV-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
+
+        PaymentTransaction transaction = new PaymentTransaction(
+                txnId,
+                caseId,
+                TenantContext.getTenantId(),
                 virtualCardId,
                 amount,
                 "INR",
-                "Flyo Treasury Gateway",
-                "VOIDED",
+                paymentAdapter.getProviderName(),
+                PaymentTransaction.STATUS_VOIDED,
                 refId,
-                java.time.LocalDateTime.now()
+                LocalDateTime.now()
         );
+        transaction.setTransactionType(PaymentTransaction.TYPE_VOID);
+        transaction.setReconciled(true);
+        transaction.setReconciledAt(LocalDateTime.now());
+        transaction.setFailureReason(reason);
 
         PaymentTransaction saved = transactionRepository.save(transaction);
         if (virtualCardId != null) {
@@ -72,21 +203,34 @@ public class PaymentSettlementService {
     }
 
     @Transactional
-    public PaymentTransaction refundCapturedPayment(String caseId, String virtualCardId, int amount, String reason) {
-        String txnId = "REFUND-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        String refId = "RFD-" + java.util.UUID.randomUUID().toString().substring(0, 10).toUpperCase();
+    public PaymentTransaction refundCapturedPayment(String caseId, String virtualCardId, int amount, String reason, String idempotencyKey) {
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<PaymentTransaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
+            if (existing.isPresent()) {
+                return existing.get();
+            }
+        }
+
+        String txnId = "REFUND-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String refId = "RFD-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
 
         PaymentTransaction transaction = new PaymentTransaction(
                 txnId,
                 caseId,
+                TenantContext.getTenantId(),
                 virtualCardId,
                 amount,
                 "INR",
-                "Flyo Treasury Gateway",
-                "REFUNDED",
+                paymentAdapter.getProviderName(),
+                PaymentTransaction.STATUS_REFUNDED,
                 refId,
-                java.time.LocalDateTime.now()
+                LocalDateTime.now()
         );
+        transaction.setIdempotencyKey(idempotencyKey);
+        transaction.setTransactionType(PaymentTransaction.TYPE_REFUND);
+        transaction.setReconciled(true);
+        transaction.setReconciledAt(LocalDateTime.now());
+        transaction.setFailureReason(reason);
 
         PaymentTransaction saved = transactionRepository.save(transaction);
         if (virtualCardId != null) {
@@ -98,9 +242,84 @@ public class PaymentSettlementService {
         return saved;
     }
 
+    @Transactional
+    public PaymentTransaction refundCapturedPayment(String caseId, String virtualCardId, int amount, String reason) {
+        return refundCapturedPayment(caseId, virtualCardId, amount, reason, null);
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. FINANCIAL RECONCILIATION JOB
+    // -------------------------------------------------------------------------
+    @Transactional
+    public Map<String, Object> runFinancialReconciliation() {
+        List<PaymentTransaction> unreconciled = transactionRepository.findByReconciledFalse();
+        int reconciledCount = 0;
+        int discrepancyCount = 0;
+
+        for (PaymentTransaction tx : unreconciled) {
+            if (tx.getVirtualCardId() != null) {
+                Optional<VirtualCard> cardOpt = cardRepository.findById(tx.getVirtualCardId());
+                if (cardOpt.isPresent()) {
+                    VirtualCard card = cardOpt.get();
+                    if (tx.getAmount() > card.getAmount()) {
+                        // Discrepancy detected: transaction amount exceeds card limit
+                        tx.setStatus(PaymentTransaction.STATUS_MANUAL_REVIEW_REQUIRED);
+                        tx.setFailureReason("Reconciliation Discrepancy: captured amount (" + tx.getAmount() +
+                                ") exceeds card limit (" + card.getAmount() + ")");
+                        discrepancyCount++;
+                        if (metricsService != null) {
+                            metricsService.recordPaymentDiscrepancy(tx.getTenantId(), "CARD_LIMIT_EXCEEDED");
+                        }
+                    } else {
+                        tx.setReconciled(true);
+                        tx.setReconciledAt(LocalDateTime.now());
+                        reconciledCount++;
+                    }
+                    transactionRepository.save(tx);
+                }
+            } else {
+                tx.setReconciled(true);
+                tx.setReconciledAt(LocalDateTime.now());
+                transactionRepository.save(tx);
+                reconciledCount++;
+            }
+        }
+
+        log.info("[Payment Reconciliation] Completed. Reconciled: {}, Discrepancies flagged: {}", reconciledCount, discrepancyCount);
+        return Map.of(
+                "totalProcessed", unreconciled.size(),
+                "reconciledCount", reconciledCount,
+                "discrepancyCount", discrepancyCount,
+                "timestamp", LocalDateTime.now().toString()
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. LEGACY ADAPTER COMPATIBILITY & TENANT LIMITS
+    // -------------------------------------------------------------------------
+    @Transactional
+    public VirtualCard issueVirtualCard(String caseId, String optionId, int amount, String passengerName) {
+        String tenantId = TenantContext.getTenantId();
+        if (!verifyTenantSpendingLimit(tenantId, amount, "INR")) {
+            throw new IllegalArgumentException("Requested card amount ₹" + amount + " exceeds spending limit for tenant " + tenantId);
+        }
+        return paymentAdapter.issueVirtualCard(caseId, optionId, amount, passengerName);
+    }
+
+    @Transactional
+    public PaymentTransaction recordSettlement(String caseId, String virtualCardId, int amount, String vendor) {
+        return paymentAdapter.recordSettlement(caseId, virtualCardId, amount, vendor);
+    }
+
     public Optional<VirtualCard> getActiveCardForCase(String caseId) {
         return cardRepository.findFirstByCaseIdOrderByIssuedAtDesc(caseId)
                 .filter(c -> !"CANCELLED".equalsIgnoreCase(c.getStatus()) && !"VOIDED".equalsIgnoreCase(c.getStatus()));
+    }
+
+    @Transactional
+    public boolean voidVirtualCard(String caseId, String virtualCardId) {
+        log.info("[Payment Settlement] Voiding VCC {} for Case {}", virtualCardId, caseId);
+        return paymentAdapter.voidAuthorization(caseId, virtualCardId);
     }
 
     public List<PaymentTransaction> getLedgerForCase(String caseId) {
@@ -111,27 +330,28 @@ public class PaymentSettlementService {
         return paymentAdapter.getProviderName();
     }
 
-    /**
-     * Verifies that the proposed rebooking fare difference complies with corporate travel policy
-     * and agency authorized spending limits.
-     */
-    public boolean verifyAgencySpendingLimit(String caseId, int amount) {
-        return verifyAgencySpendingLimit(caseId, amount, "INR", "Default");
-    }
-
-    public boolean verifyAgencySpendingLimit(String caseId, int amount, String currency, String agencyName) {
-        int limit = getAgencySpendingLimit(agencyName, currency);
+    public boolean verifyTenantSpendingLimit(String tenantId, int amount, String currency) {
+        int limit = getTenantSpendingLimit(tenantId, currency);
         return amount <= limit;
     }
 
-    public int getAgencySpendingLimit(String agencyName, String currency) {
-        if (agencyName != null && agencySpendingLimits.containsKey(agencyName)) {
-            return agencySpendingLimits.get(agencyName);
-        }
-        return agencySpendingLimits.getOrDefault("Default", 50000);
+    public boolean verifyAgencySpendingLimit(String caseId, int amount) {
+        return verifyTenantSpendingLimit(TenantContext.getTenantId(), amount, "INR");
     }
 
-    public void setAgencySpendingLimit(String agencyName, int limit) {
-        agencySpendingLimits.put(agencyName, limit);
+    public boolean verifyAgencySpendingLimit(String caseId, int amount, String currency, String agencyName) {
+        String key = (agencyName != null && !agencyName.isBlank()) ? agencyName : TenantContext.getTenantId();
+        return verifyTenantSpendingLimit(key, amount, currency);
+    }
+
+    public int getTenantSpendingLimit(String tenantId, String currency) {
+        if (tenantId != null && tenantSpendingLimits.containsKey(tenantId)) {
+            return tenantSpendingLimits.get(tenantId);
+        }
+        return tenantSpendingLimits.getOrDefault("Default", 50000);
+    }
+
+    public void setTenantSpendingLimit(String tenantId, int limit) {
+        tenantSpendingLimits.put(tenantId, limit);
     }
 }

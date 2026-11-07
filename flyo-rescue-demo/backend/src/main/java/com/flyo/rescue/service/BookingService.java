@@ -2,6 +2,12 @@ package com.flyo.rescue.service;
 
 import com.flyo.rescue.model.Booking;
 import com.flyo.rescue.repository.BookingRepository;
+import com.flyo.rescue.security.FlyoUserPrincipal;
+import com.flyo.rescue.security.TenantContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,14 +18,30 @@ import java.util.UUID;
 @Service
 public class BookingService {
 
+    private static final Logger log = LoggerFactory.getLogger(BookingService.class);
+
     private final BookingRepository bookingRepository;
 
     public BookingService(BookingRepository bookingRepository) {
         this.bookingRepository = bookingRepository;
     }
 
+    private boolean isGlobalAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof FlyoUserPrincipal p) {
+            return p.getAuthorizedTenants().contains("*");
+        }
+        return false;
+    }
+
     public List<Booking> getAllBookings() {
-        List<Booking> list = new java.util.ArrayList<>(bookingRepository.findAll());
+        String tenantId = TenantContext.getTenantId();
+        List<Booking> list;
+        if (isGlobalAdmin()) {
+            list = new java.util.ArrayList<>(bookingRepository.findAll());
+        } else {
+            list = new java.util.ArrayList<>(bookingRepository.findByTenantIdOrderByIdAsc(tenantId));
+        }
         list.sort((a, b) -> {
             if ("B1".equalsIgnoreCase(a.getId())) return -1;
             if ("B1".equalsIgnoreCase(b.getId())) return 1;
@@ -29,7 +51,16 @@ public class BookingService {
     }
 
     public Optional<Booking> getBookingById(String id) {
-        return bookingRepository.findById(id);
+        Optional<Booking> opt = bookingRepository.findById(id);
+        if (opt.isPresent()) {
+            String tenantId = TenantContext.getTenantId();
+            if (!isGlobalAdmin() && !tenantId.equals(opt.get().getTenantId())) {
+                log.warn("[Tenant Security] Blocked cross-tenant booking access: booking {} belongs to {}, caller tenant is {}",
+                        id, opt.get().getTenantId(), tenantId);
+                return Optional.empty();
+            }
+        }
+        return opt;
     }
 
     public Booking saveBooking(Booking booking) {
@@ -51,12 +82,16 @@ public class BookingService {
         if (booking.getHotelNote() == null || booking.getHotelNote().isBlank()) {
             booking.setHotelNote("None");
         }
+        if (booking.getTenantId() == null || booking.getTenantId().isBlank()) {
+            booking.setTenantId(TenantContext.getTenantId());
+        }
         return bookingRepository.save(booking);
     }
 
     @Transactional
     public boolean deleteBooking(String id) {
-        if (bookingRepository.existsById(id)) {
+        Optional<Booking> opt = getBookingById(id);
+        if (opt.isPresent()) {
             bookingRepository.deleteById(id);
             return true;
         }
@@ -65,12 +100,25 @@ public class BookingService {
 
     @Transactional
     public void clearAllBookings() {
-        bookingRepository.deleteAll();
+        if (isGlobalAdmin()) {
+            bookingRepository.deleteAll();
+        } else {
+            String tenantId = TenantContext.getTenantId();
+            List<Booking> tenantBookings = bookingRepository.findByTenantIdOrderByIdAsc(tenantId);
+            bookingRepository.deleteAll(tenantBookings);
+        }
     }
 
     @Transactional
     public List<Booking> resetSeedBookings() {
-        bookingRepository.deleteAll();
+        String currentTenant = TenantContext.getTenantId();
+        if (isGlobalAdmin()) {
+            bookingRepository.deleteAll();
+        } else {
+            List<Booking> tenantBookings = bookingRepository.findByTenantIdOrderByIdAsc(currentTenant);
+            bookingRepository.deleteAll(tenantBookings);
+        }
+
         List<Booking> seedBookings = List.of(
                 new Booking(
                         "B1",
@@ -138,6 +186,9 @@ public class BookingService {
                         "+919844556677"
                 )
         );
+        for (Booking b : seedBookings) {
+            b.setTenantId(currentTenant);
+        }
         return bookingRepository.saveAll(seedBookings);
     }
 }

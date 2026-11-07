@@ -1,5 +1,6 @@
 package com.flyo.rescue.controller;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Controller
+@Profile("!prod")
 @RequestMapping("/mock-airline")
 public class MockAirlineController {
 

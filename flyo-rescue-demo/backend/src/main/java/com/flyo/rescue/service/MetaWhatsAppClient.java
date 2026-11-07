@@ -23,6 +23,7 @@ public class MetaWhatsAppClient {
     private final WhatsAppChatLogService chatLogService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient;
+    private volatile String lastDispatchedMessageId;
 
     public MetaWhatsAppClient(WhatsAppConfig config, WhatsAppChatLogService chatLogService) {
         this.config = config;
@@ -30,6 +31,10 @@ public class MetaWhatsAppClient {
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
+    }
+
+    public String getLastDispatchedMessageId() {
+        return lastDispatchedMessageId;
     }
 
     public boolean sendTextMessage(String toPhone, String text) {
@@ -117,6 +122,14 @@ public class MetaWhatsAppClient {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() >= 200 && response.statusCode() < 300) {
             log.info("[Meta WhatsApp Outbound] Successfully dispatched message. Response: {}", response.body());
+            try {
+                com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.body());
+                com.fasterxml.jackson.databind.JsonNode messages = root.path("messages");
+                if (messages.isArray() && !messages.isEmpty()) {
+                    this.lastDispatchedMessageId = messages.get(0).path("id").asText();
+                    log.info("[Meta WhatsApp Outbound] Dispatched wamid: {}", this.lastDispatchedMessageId);
+                }
+            } catch (Exception ignored) {}
             return true;
         } else {
             log.warn("[Meta WhatsApp Outbound] Meta API returned non-200 status {}: {}", response.statusCode(), response.body());

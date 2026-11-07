@@ -17,4 +17,6 @@ public interface PaymentGatewayAdapter {
     VirtualCard issueVirtualCard(String caseId, String optionId, int amount, String passengerName);
 
     PaymentTransaction recordSettlement(String caseId, String virtualCardId, int amount, String vendor);
+
+    boolean voidAuthorization(String caseId, String virtualCardId);
 }

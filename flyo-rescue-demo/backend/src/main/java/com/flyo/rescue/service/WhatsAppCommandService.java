@@ -799,8 +799,7 @@ public class WhatsAppCommandService {
             try {
                 var vccOpt = paymentSettlementService.getActiveCardForCase(targetCase);
                 if (vccOpt.isPresent()) {
-                    String num = vccOpt.get().getCardNumber();
-                    vccCardLast4 = num.substring(Math.max(0, num.length() - 4));
+                    vccCardLast4 = vccOpt.get().getLastFour();
                 }
                 var txns = paymentSettlementService.getLedgerForCase(targetCase);
                 if (!txns.isEmpty()) {

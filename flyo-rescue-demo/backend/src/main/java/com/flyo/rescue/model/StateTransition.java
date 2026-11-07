@@ -20,6 +20,11 @@ public class StateTransition {
     private String toState;
     private String actor;
 
+    private String tenantId = "tenant_default";
+    private String correlationId;
+    private String causationId;
+    private String externalReference;
+
     @jakarta.persistence.Column(length = 2000)
     private String reason;
 
@@ -91,5 +96,37 @@ public class StateTransition {
 
     public void setTimestamp(LocalDateTime timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public String getCausationId() {
+        return causationId;
+    }
+
+    public void setCausationId(String causationId) {
+        this.causationId = causationId;
+    }
+
+    public String getExternalReference() {
+        return externalReference;
+    }
+
+    public void setExternalReference(String externalReference) {
+        this.externalReference = externalReference;
     }
 }

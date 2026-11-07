@@ -163,7 +163,7 @@ public class RebookingOrchestrationService {
                         "PAYMENT_INSTRUMENT_READY",
                         "Flyo Treasury",
                         String.format("Single-use corporate virtual card %s armed for ₹%,d for option %s.",
-                                card.getCardNumber(), option.getExtraCost(), option.getFlight())
+                                card.getMaskedCardNumber(), option.getExtraCost(), option.getFlight())
                 );
 
                 // Step B3: Payment Instrument Ready
@@ -208,7 +208,7 @@ public class RebookingOrchestrationService {
             VirtualCard vcc = vccOpt.get();
             result = rebookService.executePlaywrightRebook(
                     caseId, option.getId(), option.getFlight(), rescueCase.getPassengerName(),
-                    vcc.getCardNumber(), vcc.getExpiry(), vcc.getCvv(), vcc.getAmount()
+                    vcc.getCardTokenId(), vcc.getExpiry(), "", vcc.getAmount()
             );
         } else {
             result = rebookService.executePlaywrightRebook(

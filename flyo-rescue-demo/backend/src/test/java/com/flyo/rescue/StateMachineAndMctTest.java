@@ -66,19 +66,23 @@ public class StateMachineAndMctTest {
         assertEquals(CaseStateMachineService.STATE_OPTIONS_READY, c.getState());
 
         // 2. Legal transition: OPTIONS_READY -> AWAITING_APPROVAL
-        stateMachineService.transition(c, CaseStateMachineService.STATE_AWAITING_APPROVAL, "Flyo Operator", "Option O2 approved");
+        stateMachineService.transition(c, CaseStateMachineService.STATE_AWAITING_APPROVAL, "Flyo Operator", "Option O2 submitted for review");
         assertEquals(CaseStateMachineService.STATE_AWAITING_APPROVAL, c.getState());
 
-        // 3. Illegal jump: AWAITING_APPROVAL -> DONE (Bypassing rebooking execution is strictly prohibited)
+        // 3. Illegal jump: AWAITING_APPROVAL -> REBOOKING (Bypassing human approval in APPROVED state is strictly prohibited)
         assertThrows(IllegalStateTransitionException.class, () -> {
-            stateMachineService.transition(c, CaseStateMachineService.STATE_DONE, "Adversary", "Direct completion attempt");
+            stateMachineService.transition(c, CaseStateMachineService.STATE_REBOOKING, "Flyo Rebook Engine", "Premature dispatch attempt");
         });
 
-        // 4. Legal transition: AWAITING_APPROVAL -> REBOOKING
+        // 4. Legal transition: AWAITING_APPROVAL -> APPROVED (Explicit supervisor approval)
+        stateMachineService.transition(c, CaseStateMachineService.STATE_APPROVED, "Flyo Supervisor", "Option O2 approved");
+        assertEquals(CaseStateMachineService.STATE_APPROVED, c.getState());
+
+        // 5. Legal transition: APPROVED -> REBOOKING
         stateMachineService.transition(c, CaseStateMachineService.STATE_REBOOKING, "Flyo Rebook Engine", "Playwright worker dispatched");
         assertEquals(CaseStateMachineService.STATE_REBOOKING, c.getState());
 
-        // 5. Legal transition: REBOOKING -> DONE
+        // 6. Legal transition: REBOOKING -> DONE
         stateMachineService.transition(c, CaseStateMachineService.STATE_DONE, "Playwright Worker", "Confirmed PNR received");
         assertEquals(CaseStateMachineService.STATE_DONE, c.getState());
 
