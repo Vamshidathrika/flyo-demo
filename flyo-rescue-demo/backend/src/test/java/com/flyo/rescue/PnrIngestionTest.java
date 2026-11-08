@@ -116,6 +116,93 @@ public class PnrIngestionTest {
     }
 
     @Test
+    @DisplayName("Stage 9B: Ingests multi-passenger multi-segment GDS message with onward connection")
+    void testMultiPassengerMultiSegmentGds() {
+        String complexGds = """
+                1.1SHARMA/KAVYA MRS  2.1SHARMA/ROHIT MR
+                1 AI 839 Y 29OCT HYDDEL HK2 2100 2315
+                2 AI 101 Y 30OCT DELJFK HK2 0220 0735
+                RLOC: AI772P
+                AGENCY: Apex Global Desk
+                """;
+
+        Booking booking = pnrIngestionService.parseAndIngest(complexGds, "Amadeus GDS");
+
+        assertNotNull(booking);
+        assertTrue(booking.getPassengerName().contains("Kavya Sharma"));
+        assertTrue(booking.getPassengerName().contains("Rohit Sharma"));
+        assertEquals("AI772P", booking.getPnr());
+        assertEquals("AI-839", booking.getFlight());
+        assertEquals("HYD → DEL", booking.getRoute());
+        assertTrue(booking.getDateTime().contains("29OCT 21:00"));
+        assertTrue(booking.getOnwardFlight().contains("AI-101 DEL → JFK 02:20"));
+        assertEquals("Apex Global Desk", booking.getAgency());
+    }
+
+    @Test
+    @DisplayName("Stage 9B: Ingests overnight flight with +1 arrival marker")
+    void testOvernightFlightAndTimezone() {
+        String overnightGds = """
+                1.1PATEL/SNEHA MS
+                1 6E 402 Y 15NOV BLRDEL HK1 2300 0145+1
+                RLOC: 6E881N
+                """;
+
+        Booking booking = pnrIngestionService.parseAndIngest(overnightGds, "IndiGo direct");
+
+        assertNotNull(booking);
+        assertEquals("Sneha Patel", booking.getPassengerName());
+        assertEquals("6E881N", booking.getPnr());
+        assertEquals("6E-402", booking.getFlight());
+        assertEquals("BLR → DEL", booking.getRoute());
+        assertTrue(booking.getDateTime().contains("(Overnight)"));
+    }
+
+    @Test
+    @DisplayName("Stage 9B: Duplicate PNR ingestion is idempotent and updates existing record")
+    void testIdempotentDuplicateIngestion() {
+        String initial = """
+                E-TICKET RECEIPT
+                Booking Reference: IDEM99
+                Passenger: Rahul Verma
+                Flight: UK-927
+                Route: DEL to BOM
+                Departure: 2026-11-20 18:30 IST
+                """;
+
+        Booking b1 = pnrIngestionService.parseAndIngest(initial, "Initial Agency");
+        assertNotNull(b1);
+        String bookingId = b1.getId();
+
+        String update = """
+                E-TICKET RECEIPT (UPDATED)
+                Booking Reference: IDEM99
+                Passenger: Rahul Verma
+                Flight: UK-927
+                Route: DEL to BOM
+                Departure: 2026-11-20 19:45 IST
+                Hotel: Grand Hyatt Mumbai
+                Agency: Apex Corporate Travel
+                """;
+
+        Booking b2 = pnrIngestionService.parseAndIngest(update, "Updated Agency");
+        assertEquals(bookingId, b2.getId(), "Should maintain identical booking ID on duplicate PNR");
+        assertEquals("2026-11-20 19:45 IST", b2.getDateTime());
+        assertEquals("Grand Hyatt Mumbai", b2.getHotelNote());
+        assertEquals("Apex Corporate Travel", b2.getAgency());
+    }
+
+    @Test
+    @DisplayName("Stage 9B: Invalid payloads without PNR or flight number fail closed with IllegalArgumentException")
+    void testInvalidPnrPayloadsRejectedFailClosed() {
+        assertThrows(IllegalArgumentException.class, () ->
+                pnrIngestionService.parseAndIngest("This is random gibberish without any airline codes.", "Test"));
+
+        assertThrows(IllegalArgumentException.class, () ->
+                pnrIngestionService.parseAndIngest("PNR: TEST1234 but no flight number here", "Test"));
+    }
+
+    @Test
     @DisplayName("POST /api/ingest/pnr with empty text returns 400 Bad Request")
     void testIngestApiValidation() throws Exception {
         IngestRequest emptyRequest = new IngestRequest("", "Email");

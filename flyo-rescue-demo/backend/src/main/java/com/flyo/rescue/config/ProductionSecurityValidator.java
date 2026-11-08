@@ -41,13 +41,14 @@ public class ProductionSecurityValidator implements ApplicationListener<Applicat
         log.info("[Security Startup] Validating production secrets and security posture...");
 
         // 1. Validate JWT Secret
-        if (jwtSecret == null || jwtSecret.isBlank()) {
+        String secret = (jwtSecret != null && !jwtSecret.isBlank()) ? jwtSecret : environment.getProperty("flyo.security.jwt.secret", "");
+        if (secret.isBlank()) {
             throw new IllegalStateException("FATAL: JWT_SECRET environment variable is mandatory in production profile.");
         }
-        if (jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
             throw new IllegalStateException("FATAL: JWT_SECRET must be at least 32 bytes (256 bits) for HMAC-SHA256 compliance.");
         }
-        String lowerSecret = jwtSecret.toLowerCase();
+        String lowerSecret = secret.toLowerCase();
         if (lowerSecret.contains("dummy") || lowerSecret.contains("test") || lowerSecret.contains("default") || lowerSecret.equals("flyo-production-grade-hmac-sha256-signing-secret-key-32bytes-minimum")) {
             throw new IllegalStateException("FATAL: Insecure or default JWT_SECRET detected in production profile.");
         }
@@ -63,10 +64,11 @@ public class ProductionSecurityValidator implements ApplicationListener<Applicat
             throw new IllegalStateException("FATAL: Production profile requires 'org.postgresql.Driver'. Found: '" + driverClass + "'.");
         }
 
-        if (dbPassword == null || dbPassword.isBlank()) {
+        String pass = (dbPassword != null && !dbPassword.isBlank()) ? dbPassword : environment.getProperty("spring.datasource.password", "");
+        if (pass.isBlank()) {
             throw new IllegalStateException("FATAL: SPRING_DATASOURCE_PASSWORD is required in production profile.");
         }
-        if (dbPassword.equals("flyo_secure_password_2026") || dbPassword.equalsIgnoreCase("password") || dbPassword.equalsIgnoreCase("admin")) {
+        if (pass.equals("flyo_secure_password_2026") || pass.equalsIgnoreCase("password") || pass.equalsIgnoreCase("admin")) {
             throw new IllegalStateException("FATAL: Default fallback database password detected in production profile.");
         }
 
@@ -78,13 +80,13 @@ public class ProductionSecurityValidator implements ApplicationListener<Applicat
 
         // 4. Reject MOCK and DEMO Provider Configurations
         String airlineProvider = environment.getProperty("airline.booking.provider", "").toUpperCase();
-        if (airlineProvider.contains("MOCK") || airlineProvider.contains("PLAYWRIGHT") || airlineProvider.contains("DEMO")) {
-            throw new IllegalStateException("FATAL: Mock airline booking provider ('" + airlineProvider + "') is strictly forbidden in production. Use AMADEUS or SABRE.");
+        if (airlineProvider.contains("MOCK") || airlineProvider.contains("PLAYWRIGHT") || airlineProvider.contains("DEMO") || airlineProvider.contains("SANDBOX")) {
+            throw new IllegalStateException("FATAL: Mock or Sandbox airline booking provider ('" + airlineProvider + "') is strictly forbidden in production. Use AMADEUS or SABRE.");
         }
 
         String paymentProvider = environment.getProperty("payment.vcc.provider", "").toUpperCase();
-        if (paymentProvider.contains("MOCK") || paymentProvider.contains("FAKE") || paymentProvider.contains("SIMULAT")) {
-            throw new IllegalStateException("FATAL: Mock payment provider ('" + paymentProvider + "') is strictly forbidden in production. Use STRIPE or real banking provider.");
+        if (paymentProvider.contains("MOCK") || paymentProvider.contains("FAKE") || paymentProvider.contains("SIMULAT") || paymentProvider.contains("SANDBOX")) {
+            throw new IllegalStateException("FATAL: Mock or Sandbox payment provider ('" + paymentProvider + "') is strictly forbidden in production. Use STRIPE or real banking provider.");
         }
 
         // 5. Reject Radar Mock Mode

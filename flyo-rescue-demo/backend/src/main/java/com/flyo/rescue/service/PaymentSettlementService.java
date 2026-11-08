@@ -124,6 +124,12 @@ public class PaymentSettlementService {
     public PaymentTransaction capturePayment(String caseId, String virtualCardId, int amount, String currency,
                                              String referenceId, String idempotencyKey) {
         validateCurrencyAndAmount(amount, currency);
+        if (!paymentAdapter.isConfigured()) {
+            throw new com.flyo.rescue.exception.ProviderNotConfiguredException(
+                    paymentAdapter.getProviderName(),
+                    "BLOCKED BY EXTERNAL ACCESS: Payment gateway adapter is not configured for capture."
+            );
+        }
         String currentTenant = TenantContext.getTenantId();
 
         // Idempotency Check
@@ -172,6 +178,14 @@ public class PaymentSettlementService {
     // -------------------------------------------------------------------------
     @Transactional
     public PaymentTransaction voidAuthorization(String caseId, String virtualCardId, int amount, String reason) {
+        if (!paymentAdapter.isConfigured()) {
+            throw new com.flyo.rescue.exception.ProviderNotConfiguredException(
+                    paymentAdapter.getProviderName(),
+                    "BLOCKED BY EXTERNAL ACCESS: Payment gateway adapter is not configured for void."
+            );
+        }
+        paymentAdapter.voidAuthorization(caseId, virtualCardId);
+
         String txnId = "VOID-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         String refId = "REV-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
 
@@ -204,6 +218,12 @@ public class PaymentSettlementService {
 
     @Transactional
     public PaymentTransaction refundCapturedPayment(String caseId, String virtualCardId, int amount, String reason, String idempotencyKey) {
+        if (!paymentAdapter.isConfigured()) {
+            throw new com.flyo.rescue.exception.ProviderNotConfiguredException(
+                    paymentAdapter.getProviderName(),
+                    "BLOCKED BY EXTERNAL ACCESS: Payment gateway adapter is not configured for refund."
+            );
+        }
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<PaymentTransaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
             if (existing.isPresent()) {

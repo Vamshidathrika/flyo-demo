@@ -20,15 +20,18 @@ public class AviationIntelligenceController {
     private final AviationNewsIntelligenceService newsService;
     private final FlightEvidenceReconciliationService reconciliationService;
     private final PredictionServiceClient predictionServiceClient;
+    private final com.flyo.rescue.repository.BookingRepository bookingRepository;
 
     public AviationIntelligenceController(OpenMeteoWeatherService weatherService,
                                           AviationNewsIntelligenceService newsService,
                                           FlightEvidenceReconciliationService reconciliationService,
-                                          PredictionServiceClient predictionServiceClient) {
+                                          PredictionServiceClient predictionServiceClient,
+                                          com.flyo.rescue.repository.BookingRepository bookingRepository) {
         this.weatherService = weatherService;
         this.newsService = newsService;
         this.reconciliationService = reconciliationService;
         this.predictionServiceClient = predictionServiceClient;
+        this.bookingRepository = bookingRepository;
     }
 
     @GetMapping("/weather/{airportCode}")
@@ -167,5 +170,33 @@ public class AviationIntelligenceController {
     @GetMapping("/intelligence/monitoring/summary")
     public ResponseEntity<Map<String, Object>> getMonitoringSummary() {
         return ResponseEntity.ok(predictionServiceClient.getMonitoringSummary());
+    }
+
+    @GetMapping("/intelligence/monitoring/connection-risks")
+    public ResponseEntity<List<ConnectionRiskResponseDto>> getConnectionRisks() {
+        List<com.flyo.rescue.model.Booking> bookings = bookingRepository.findAll();
+        List<ConnectionRiskResponseDto> risks = new java.util.ArrayList<>();
+        for (com.flyo.rescue.model.Booking b : bookings) {
+            String onward = b.getOnwardFlight();
+            if (onward != null && !onward.isBlank() && !"None".equalsIgnoreCase(onward)) {
+                String hub = "DEL";
+                if (b.getRoute() != null && b.getRoute().contains("→")) {
+                    String[] parts = b.getRoute().split("→");
+                    if (parts.length > 1) hub = parts[1].trim();
+                }
+                ConnectionRiskRequestDto req = new ConnectionRiskRequestDto(
+                        hub, b.getFlight(), onward, 60, 30.0
+                );
+                try {
+                    ConnectionRiskResponseDto evaluated = predictionServiceClient.evaluateConnectionRisk(req);
+                    if (evaluated != null && evaluated.getAirportCode() != null) {
+                        risks.add(evaluated);
+                    }
+                } catch (Exception ex) {
+                    // Gracefully skip failed individual evaluation
+                }
+            }
+        }
+        return ResponseEntity.ok(risks);
     }
 }

@@ -14,5 +14,7 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     // Tenant-isolated query interfaces
     List<Booking> findByTenantIdOrderByIdAsc(String tenantId);
     Optional<Booking> findByIdAndTenantId(String id, String tenantId);
+    Optional<Booking> findByPnr(String pnr);
+    Optional<Booking> findByPnrAndTenantId(String pnr, String tenantId);
     long countByTenantId(String tenantId);
 }

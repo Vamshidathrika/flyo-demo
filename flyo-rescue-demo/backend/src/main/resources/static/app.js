@@ -43,7 +43,6 @@ function switchSectionView(tabName) {
 document.addEventListener("DOMContentLoaded", () => {
     fetchBookings();
     fetchActiveCases();
-    checkMockPortalStatus();
     fetchWhatsAppOperatorChat();
     fetchOtpStatus();
 
@@ -2403,31 +2402,33 @@ async function fetchConnectionRiskQueue() {
     const tbody = document.getElementById("ops-connections-tbody");
     if (!tbody) return;
     try {
-        const sampleConnections = [
-            { hub: "DEL", inbound: "6E-501 (HYD-DEL)", outbound: "6E-204 (DEL-ATQ)", window: 55, mct: 45, margin: 10, missProb: 0.38, action: "EXPEDITED_GATE_ESCORT", desc: "Escort team dispatched to Delhi T3 transfer corridor" },
-            { hub: "BOM", inbound: "AI-839 (DEL-BOM)", outbound: "AI-101 (BOM-JFK)", window: 70, mct: 90, margin: -20, missProb: 0.76, action: "PROACTIVE_REBOOKING_HOLD", desc: "MCT buffer breached (-20m); initiate alternative routing hold on next morning AI-103" },
-            { hub: "BLR", inbound: "UK-927 (BOM-BLR)", outbound: "UK-812 (BLR-MAA)", window: 65, mct: 45, margin: 20, missProb: 0.12, action: "STANDARD_MONITORING", desc: "Healthy 20m buffer above Bengaluru minimum connect time" },
-            { hub: "HYD", inbound: "6E-312 (BLR-HYD)", outbound: "6E-588 (HYD-CCU)", window: 40, mct: 45, margin: -5, missProb: 0.54, action: "EXPEDITED_GATE_ESCORT", desc: "5m deficit below MCT; alert Hyderabad ground operations" }
-        ];
+        const res = await fetch("/api/intelligence/monitoring/connection-risks");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const connections = await res.json();
 
-        tbody.innerHTML = sampleConnections.map(c => {
-            const probPct = Math.round(c.missProb * 100);
+        if (!connections || connections.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 1.5rem;">No active passenger connections requiring monitoring in current schedule.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = connections.map(c => {
+            const probPct = Math.round((c.missed_connection_probability || 0) * 100);
             const probColor = probPct >= 50 ? "#dc2626" : probPct >= 25 ? "#ea580c" : "#15803d";
-            const actionBadgeColor = c.action === "PROACTIVE_REBOOKING_HOLD" ? "#fee2e2" : c.action === "EXPEDITED_GATE_ESCORT" ? "#ffedd5" : "#f0fdf4";
-            const actionTextColor = c.action === "PROACTIVE_REBOOKING_HOLD" ? "#b91c1c" : c.action === "EXPEDITED_GATE_ESCORT" ? "#c2410c" : "#15803d";
+            const actionBadgeColor = c.recommended_action === "PROACTIVE_REBOOKING_HOLD" ? "#fee2e2" : c.recommended_action === "EXPEDITED_GATE_ESCORT" ? "#ffedd5" : "#f0fdf4";
+            const actionTextColor = c.recommended_action === "PROACTIVE_REBOOKING_HOLD" ? "#b91c1c" : c.recommended_action === "EXPEDITED_GATE_ESCORT" ? "#c2410c" : "#15803d";
 
             return `
                 <tr>
-                    <td><strong>${escapeHtml(c.hub)}</strong></td>
+                    <td><strong>${escapeHtml(c.airport_code || 'HUB')}</strong></td>
                     <td>
-                        <div style="font-size: 0.8rem; font-weight: 600; color: #0f172a;">${escapeHtml(c.inbound)}</div>
-                        <div style="font-size: 0.74rem; color: #64748b;">&darr; ${escapeHtml(c.outbound)}</div>
+                        <div style="font-size: 0.8rem; font-weight: 600; color: #0f172a;">${escapeHtml(c.inbound_flight || 'Inbound')}</div>
+                        <div style="font-size: 0.74rem; color: #64748b;">&darr; ${escapeHtml(c.outbound_flight || 'Outbound')}</div>
                     </td>
-                    <td>${c.window}m</td>
-                    <td>${c.mct}m</td>
+                    <td>${c.scheduled_connection_minutes || 60}m</td>
+                    <td>${c.minimum_connecting_time_minutes || 45}m</td>
                     <td>
-                        <strong style="color: ${c.margin < 0 ? '#dc2626' : '#15803d'};">
-                            ${c.margin > 0 ? '+' : ''}${c.margin}m
+                        <strong style="color: ${(c.connection_margin_minutes || 0) < 0 ? '#dc2626' : '#15803d'};">
+                            ${(c.connection_margin_minutes || 0) > 0 ? '+' : ''}${c.connection_margin_minutes || 0}m
                         </strong>
                     </td>
                     <td>
@@ -2436,11 +2437,11 @@ async function fetchConnectionRiskQueue() {
                     <td>
                         <div>
                             <span class="badge" style="background: ${actionBadgeColor}; color: ${actionTextColor}; font-size: 0.68rem; font-weight: 700;">
-                                ${escapeHtml(c.action)}
+                                ${escapeHtml(c.recommended_action || 'STANDARD_MONITORING')}
                             </span>
                         </div>
                         <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">
-                            ${escapeHtml(c.desc)}
+                            ${escapeHtml(c.action_description || 'Routine monitoring')}
                         </div>
                     </td>
                 </tr>
