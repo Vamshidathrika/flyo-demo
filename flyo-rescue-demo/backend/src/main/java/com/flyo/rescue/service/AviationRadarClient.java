@@ -47,6 +47,11 @@ public class AviationRadarClient {
             return getMockFlightStatus(normalizedFlight);
         }
 
+        if (config.getApiKey() == null || config.getApiKey().isBlank()) {
+            log.warn("[Aviation Radar] Provider '{}' unconfigured (missing API key). Returning empty status (fail closed).", config.getProvider());
+            return Optional.empty();
+        }
+
         try {
             // Live HTTP Query (AviationStack format: /flights?access_key=...&flight_iata=...)
             String targetUrl = String.format("%s/flights?access_key=%s&flight_iata=%s",

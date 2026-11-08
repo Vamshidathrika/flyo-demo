@@ -167,59 +167,98 @@ async def estimate_passenger_impact(request: PassengerImpactRequest):
 
 @app.get("/monitoring/leaderboard", summary="Flight Risk Leaderboard")
 async def get_risk_leaderboard():
-    """Returns top prioritized high-risk flights across active operations."""
-    sample_flights = [
-        FlightPredictionRequest(flight_number="6E-501", carrier_code="6E", origin_airport="DEL", dest_airport="BOM", scheduled_dep_time="07:15", departure_date=datetime.date.today().isoformat(), visibility_km=0.8, is_thunderstorm=0),
-        FlightPredictionRequest(flight_number="AI-839", carrier_code="AI", origin_airport="HYD", dest_airport="DEL", scheduled_dep_time="18:30", departure_date=datetime.date.today().isoformat(), temperature_c=31.0, is_thunderstorm=1),
-        FlightPredictionRequest(flight_number="UK-927", carrier_code="UK", origin_airport="BOM", dest_airport="BLR", scheduled_dep_time="19:45", departure_date=datetime.date.today().isoformat(), precipitation_mm=22.0, wind_speed_kmh=48.0, is_thunderstorm=1),
-        FlightPredictionRequest(flight_number="6E-204", carrier_code="6E", origin_airport="BLR", dest_airport="MAA", scheduled_dep_time="08:00", departure_date=datetime.date.today().isoformat()),
-        FlightPredictionRequest(flight_number="UA-240", carrier_code="UA", origin_airport="ORD", dest_airport="SFO", scheduled_dep_time="17:20", departure_date=datetime.date.today().isoformat(), wind_speed_kmh=42.0),
-    ]
+    """Returns top prioritized high-risk flights dynamically computed from real prediction records."""
+    recent_predictions = monitoring_db.get_predictions(limit=100)
+    seen_flights = set()
     leaderboard = []
-    for f in sample_flights:
-        pred = predictor.predict_single(f)
-        impact = predictor.estimate_passenger_impact(PassengerImpactRequest(
-            flight_number=f.flight_number,
-            carrier_code=f.carrier_code,
-            origin_airport=f.origin_airport,
-            dest_airport=f.dest_airport,
-            disruption_probability=pred.disruption_probability or 0.15,
-            expected_delay_minutes=pred.expected_delay_minutes or 15.0
-        ))
+
+    for p in recent_predictions:
+        key = (p["carrier_code"], p["flight_number"], p["origin_airport"], p["dest_airport"])
+        if key in seen_flights:
+            continue
+        seen_flights.add(key)
+
+        disruption_prob = max(p.get("cancellation_probability") or 0.0, p.get("delay_120m_probability") or 0.0)
+        expected_delay = p.get("expected_delay_minutes") or 0.0
+        p10 = max(0.0, expected_delay * 0.5)
+        p90 = max(expected_delay, expected_delay * 1.5)
+
         leaderboard.append({
-            "flight_number": f.flight_number,
-            "carrier_code": f.carrier_code,
-            "route": f"{f.origin_airport}-{f.dest_airport}",
-            "scheduled_dep_time": f.scheduled_dep_time,
-            "disruption_probability": pred.disruption_probability,
-            "expected_delay_minutes": pred.expected_delay_minutes,
-            "delay_interval": f"{pred.delay_p10_minutes:.0f}m - {pred.delay_p90_minutes:.0f}m" if pred.delay_p10_minutes else "10m - 45m",
-            "risk_level": pred.disruption_risk_level.value,
-            "estimated_pax_affected": impact.projected_rebooking_demand,
-            "vulnerable_connections": impact.vulnerable_connections_count,
-            "top_shap_factors": [factor.model_dump() for factor in pred.top_contributing_factors[:2]],
-            "weather_hazards": pred.weather_hazards,
+            "flight_number": p["flight_number"],
+            "carrier_code": p["carrier_code"],
+            "route": f"{p['origin_airport']}-{p['dest_airport']}",
+            "scheduled_dep_time": p.get("scheduled_dep_time") or "00:00",
+            "disruption_probability": round(disruption_prob, 3),
+            "expected_delay_minutes": round(expected_delay, 1),
+            "delay_interval": f"{p10:.0f}m - {p90:.0f}m",
+            "risk_level": p.get("disruption_risk_level") or "LOW",
+            "estimated_pax_affected": 0,
+            "vulnerable_connections": 0,
+            "top_shap_factors": [],
+            "weather_hazards": [],
         })
-    # Sort descending by disruption probability
+
     leaderboard.sort(key=lambda x: x["disruption_probability"] or 0.0, reverse=True)
     return {"leaderboard": leaderboard, "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()}
 
+SUPPORTED_HUBS = [
+    {"code": "DEL", "city": "Delhi", "country": "IN"},
+    {"code": "BOM", "city": "Mumbai", "country": "IN"},
+    {"code": "BLR", "city": "Bengaluru", "country": "IN"},
+    {"code": "HYD", "city": "Hyderabad", "country": "IN"},
+    {"code": "MAA", "city": "Chennai", "country": "IN"},
+    {"code": "CCU", "city": "Kolkata", "country": "IN"},
+    {"code": "ORD", "city": "Chicago", "country": "US"},
+    {"code": "ATL", "city": "Atlanta", "country": "US"},
+    {"code": "DFW", "city": "Dallas", "country": "US"},
+    {"code": "SFO", "city": "San Francisco", "country": "US"},
+]
+
 @app.get("/monitoring/heatmap", summary="Airport Disruption Heatmap")
 async def get_airport_heatmap():
-    """Returns regional congestion and disruption heatmap across key Indian and global hubs."""
-    hubs = [
-        {"code": "DEL", "city": "Delhi", "country": "IN", "active_flights": 142, "disruption_rate": 0.28, "status": "CONGESTED", "weather": "CAT-III Fog (Vis: 800m)"},
-        {"code": "BOM", "city": "Mumbai", "country": "IN", "active_flights": 118, "disruption_rate": 0.24, "status": "ELEVATED", "weather": "Monsoon Gusts (Wind: 42km/h)"},
-        {"code": "BLR", "city": "Bengaluru", "country": "IN", "active_flights": 96, "disruption_rate": 0.12, "status": "NORMAL", "weather": "Clear (22°C)"},
-        {"code": "HYD", "city": "Hyderabad", "country": "IN", "active_flights": 74, "disruption_rate": 0.09, "status": "NORMAL", "weather": "Scattered Clouds (26°C)"},
-        {"code": "MAA", "city": "Chennai", "country": "IN", "active_flights": 62, "disruption_rate": 0.14, "status": "MODERATE", "weather": "Light Rain (28°C)"},
-        {"code": "CCU", "city": "Kolkata", "country": "IN", "active_flights": 55, "disruption_rate": 0.16, "status": "MODERATE", "weather": "Humid / Haze (29°C)"},
-        {"code": "ORD", "city": "Chicago", "country": "US", "active_flights": 185, "disruption_rate": 0.31, "status": "CONGESTED", "weather": "Crosswind (Wind: 48km/h)"},
-        {"code": "ATL", "city": "Atlanta", "country": "US", "active_flights": 210, "disruption_rate": 0.18, "status": "MODERATE", "weather": "Thunderstorms (Precip: 18mm)"},
-        {"code": "DFW", "city": "Dallas", "country": "US", "active_flights": 165, "disruption_rate": 0.15, "status": "NORMAL", "weather": "Clear Sky (24°C)"},
-        {"code": "SFO", "city": "San Francisco", "country": "US", "active_flights": 88, "disruption_rate": 0.22, "status": "ELEVATED", "weather": "Marine Layer (Vis: 2.5km)"},
-    ]
-    return {"airports": hubs, "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+    """Returns regional airport status dynamically computed from real prediction records."""
+    recent_predictions = monitoring_db.get_predictions(limit=200)
+    hubs_data = []
+
+    for hub in SUPPORTED_HUBS:
+        code = hub["code"]
+        hub_preds = [
+            p for p in recent_predictions
+            if p.get("origin_airport") == code or p.get("dest_airport") == code
+        ]
+        active_count = len(hub_preds)
+        if active_count == 0:
+            disruption_rate = 0.0
+            status_text = "NORMAL"
+            weather_text = "Telemetry Operational (0 Disrupted)"
+        else:
+            disrupted_count = sum(
+                1 for p in hub_preds
+                if (p.get("cancellation_probability") or 0.0) >= 0.35
+                or (p.get("delay_120m_probability") or 0.0) >= 0.35
+            )
+            disruption_rate = round(disrupted_count / active_count, 2)
+            if disruption_rate >= 0.30:
+                status_text = "CONGESTED"
+            elif disruption_rate >= 0.20:
+                status_text = "ELEVATED"
+            elif disruption_rate >= 0.10:
+                status_text = "MODERATE"
+            else:
+                status_text = "NORMAL"
+            weather_text = f"Live Operations ({disrupted_count}/{active_count} Elevated)"
+
+        hubs_data.append({
+            "code": code,
+            "city": hub["city"],
+            "country": hub["country"],
+            "active_flights": active_count,
+            "disruption_rate": disruption_rate,
+            "status": status_text,
+            "weather": weather_text,
+        })
+
+    return {"airports": hubs_data, "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()}
 
 # -----------------------------------------------------------------------------
 # PHASE 4: ML MONITORING & OBSERVABILITY ENDPOINTS

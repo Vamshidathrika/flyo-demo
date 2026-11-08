@@ -224,12 +224,9 @@ public class CaseService {
         if (booking != null) {
             rawOptions = flightSearchService.findCandidateOptions(caseId, booking);
         } else {
-            // Fallback for isolated tests
-            rawOptions = List.of(
-                    new RebookOption("O1", caseId, "FL201", "HYD → DEL (Direct)", "Tomorrow 06:00", "Tomorrow 08:05", 85, 0, 3, false, ""),
-                    new RebookOption("O2", caseId, "FL301", "HYD → BOM → DEL (via Mumbai)", "Tonight 23:30", "Tomorrow 01:40", 470, 4200, 1, true, ""),
-                    new RebookOption("O3", caseId, "FL401", "HYD → DEL (Direct)", "Tomorrow 10:00", "Tomorrow 12:15", -165, 1500, 2, false, "")
-            );
+            org.slf4j.LoggerFactory.getLogger(CaseService.class)
+                    .warn("[CaseService] Underlying booking not found for case {}. Returning zero candidate options.", caseId);
+            rawOptions = List.of();
         }
 
         List<RebookOption> rankedOptions = rankingEngine.rankOptions(rawOptions, rescueCase.getMissedConnection());

@@ -1,8 +1,7 @@
 package com.flyo.rescue.client;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.flyo.rescue.dto.FlightPredictionRequestDto;
-import com.flyo.rescue.dto.FlightPredictionResponseDto;
+import com.flyo.rescue.dto.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,12 +38,24 @@ public class PredictionServiceClient {
             "6E", "AI", "UK", "SG", "QP", "G8", "IX"
     );
 
+    private static final Set<String> SUPPORTED_INDIAN_CORRIDORS = Set.of(
+            "DEL-BOM", "BOM-DEL",
+            "HYD-DEL", "DEL-HYD",
+            "HYD-BOM", "BOM-HYD",
+            "HYD-BLR", "BLR-HYD",
+            "BLR-MAA", "MAA-BLR",
+            "BOM-BLR", "BLR-BOM"
+    );
+
     private final boolean enabled;
     private final String baseUrl;
     private final long timeoutMs;
     private final int failureThreshold;
     private final long recoveryTimeoutMs;
     private final String monitoringApiKey;
+
+    @Value("${flyo.ml.prediction.support-indian-corridors:false}")
+    private boolean supportIndianCorridors = false;
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -87,6 +98,14 @@ public class PredictionServiceClient {
 
     public PredictionServiceClient(boolean enabled, String baseUrl, long timeoutMs) {
         this(enabled, baseUrl, timeoutMs, 3, 5000, "flyo-monitoring-secret-key-2026");
+    }
+
+    public void setSupportIndianCorridors(boolean supportIndianCorridors) {
+        this.supportIndianCorridors = supportIndianCorridors;
+    }
+
+    public boolean isSupportIndianCorridors() {
+        return supportIndianCorridors;
     }
 
     public CircuitState getCircuitState() {
@@ -155,8 +174,11 @@ public class PredictionServiceClient {
         }
 
         // 2. Airspace geofencing check (Indian domestic or Indian carrier)
-        if (INDIAN_AIRPORTS.contains(origin) || INDIAN_AIRPORTS.contains(dest) || INDIAN_CARRIERS.contains(carrier)) {
-            log.info("[ML Client] Flight {} operates in Indian airspace. Returning UNSUPPORTED_AIRSPACE without network call.", flightNum);
+        String corridor = origin + "-" + dest;
+        boolean isSupportedIndianCorridor = supportIndianCorridors && SUPPORTED_INDIAN_CORRIDORS.contains(corridor);
+
+        if (!isSupportedIndianCorridor && (INDIAN_AIRPORTS.contains(origin) || INDIAN_AIRPORTS.contains(dest) || INDIAN_CARRIERS.contains(carrier))) {
+            log.info("[ML Client] Flight {} operates in non-covered Indian airspace ({} -> {}). Returning UNSUPPORTED_AIRSPACE without network call.", flightNum, origin, dest);
             FlightPredictionResponseDto resp = FlightPredictionResponseDto.fallback(
                     flightNum, carrier, origin, dest,
                     "UNSUPPORTED_AIRSPACE",
@@ -237,6 +259,116 @@ public class PredictionServiceClient {
         }
     }
 
+    /**
+     * Multi-horizon quantile delay forecasting.
+     */
+    public DelayForecastResponseDto predictDelayForecast(DelayForecastRequestDto request) {
+        String flightNum = request.getFlightNumber() != null ? request.getFlightNumber() : "UNKNOWN";
+        if (!enabled) {
+            return DelayForecastResponseDto.fallback(flightNum, request.getOperationalHorizon());
+        }
+        try {
+            String requestJson = objectMapper.writeValueAsString(request);
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/predict/delay-forecast"))
+                    .timeout(Duration.ofMillis(timeoutMs))
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestJson))
+                    .build();
+
+            HttpResponse<String> httpResponse = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (httpResponse.statusCode() == 200) {
+                return objectMapper.readValue(httpResponse.body(), DelayForecastResponseDto.class);
+            } else {
+                log.warn("[ML Client] Delay forecast returned non-200: {} - {}", httpResponse.statusCode(), httpResponse.body());
+                return DelayForecastResponseDto.fallback(flightNum, request.getOperationalHorizon());
+            }
+        } catch (Exception e) {
+            log.warn("[ML Client] Error querying delay forecast: {}", e.getMessage());
+            return DelayForecastResponseDto.fallback(flightNum, request.getOperationalHorizon());
+        }
+    }
+
+    /**
+     * Evaluates passenger connection risk with airport-specific MCT rules.
+     */
+    public ConnectionRiskResponseDto evaluateConnectionRisk(ConnectionRiskRequestDto request) {
+        String airport = request.getAirportCode() != null ? request.getAirportCode() : "UNKNOWN";
+        String inbound = request.getInboundFlightNumber() != null ? request.getInboundFlightNumber() : "UNKNOWN";
+        String outbound = request.getOutboundFlightNumber() != null ? request.getOutboundFlightNumber() : "UNKNOWN";
+        if (!enabled) {
+            return ConnectionRiskResponseDto.fallback(airport, inbound, outbound);
+        }
+        try {
+            String requestJson = objectMapper.writeValueAsString(request);
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/predict/connection-risk"))
+                    .timeout(Duration.ofMillis(timeoutMs))
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestJson))
+                    .build();
+
+            HttpResponse<String> httpResponse = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (httpResponse.statusCode() == 200) {
+                return objectMapper.readValue(httpResponse.body(), ConnectionRiskResponseDto.class);
+            } else {
+                log.warn("[ML Client] Connection risk returned non-200: {} - {}", httpResponse.statusCode(), httpResponse.body());
+                return ConnectionRiskResponseDto.fallback(airport, inbound, outbound);
+            }
+        } catch (Exception e) {
+            log.warn("[ML Client] Error querying connection risk: {}", e.getMessage());
+            return ConnectionRiskResponseDto.fallback(airport, inbound, outbound);
+        }
+    }
+
+    /**
+     * Estimates flight passenger disruption impact, vulnerable connections, and rescue workload.
+     */
+    public PassengerImpactResponseDto estimatePassengerImpact(PassengerImpactRequestDto request) {
+        String flightNum = request.getFlightNumber() != null ? request.getFlightNumber() : "UNKNOWN";
+        String carrier = request.getCarrierCode() != null ? request.getCarrierCode() : "UNKNOWN";
+        String origin = request.getOriginAirport() != null ? request.getOriginAirport() : "UNKNOWN";
+        String dest = request.getDestAirport() != null ? request.getDestAirport() : "UNKNOWN";
+        if (!enabled) {
+            return PassengerImpactResponseDto.fallback(flightNum, carrier, origin, dest);
+        }
+        try {
+            String requestJson = objectMapper.writeValueAsString(request);
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/predict/passenger-impact"))
+                    .timeout(Duration.ofMillis(timeoutMs))
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestJson))
+                    .build();
+
+            HttpResponse<String> httpResponse = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (httpResponse.statusCode() == 200) {
+                return objectMapper.readValue(httpResponse.body(), PassengerImpactResponseDto.class);
+            } else {
+                log.warn("[ML Client] Passenger impact returned non-200: {} - {}", httpResponse.statusCode(), httpResponse.body());
+                return PassengerImpactResponseDto.fallback(flightNum, carrier, origin, dest);
+            }
+        } catch (Exception e) {
+            log.warn("[ML Client] Error querying passenger impact: {}", e.getMessage());
+            return PassengerImpactResponseDto.fallback(flightNum, carrier, origin, dest);
+        }
+    }
+
+    public java.util.Map<String, Object> getRiskLeaderboard() {
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        fetchAndPutMonitoringEndpoint("/monitoring/leaderboard", "data", result);
+        return result;
+    }
+
+    public java.util.Map<String, Object> getAirportHeatmap() {
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        fetchAndPutMonitoringEndpoint("/monitoring/heatmap", "data", result);
+        return result;
+    }
+
     public boolean isServiceHealthy() {
         if (!enabled) return false;
         try {
@@ -283,6 +415,10 @@ public class PredictionServiceClient {
             fetchAndPutMonitoringEndpoint("/monitoring/governance", "governance", result);
             // 7. Fetch Model Performance
             fetchAndPutMonitoringEndpoint("/monitoring/model-performance", "performance", result);
+            // 8. Fetch Risk Leaderboard
+            fetchAndPutMonitoringEndpoint("/monitoring/leaderboard", "leaderboard", result);
+            // 9. Fetch Regional Heatmap
+            fetchAndPutMonitoringEndpoint("/monitoring/heatmap", "heatmap", result);
         } catch (Exception e) {
             log.warn("[ML Client] Failed to fetch complete monitoring summary: {}", e.getMessage());
             result.put("error", "Failed to retrieve complete monitoring telemetry: " + e.getMessage());

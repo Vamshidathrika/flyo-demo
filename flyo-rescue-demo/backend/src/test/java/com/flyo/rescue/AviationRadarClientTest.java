@@ -46,6 +46,9 @@ public class AviationRadarClientTest {
 
     @BeforeEach
     void setUp() {
+        if (radarConfig != null) {
+            radarConfig.setMockMode(true);
+        }
         // Reset B1 to Checked-in
         bookingRepository.findById("B1").ifPresent(b -> {
             b.setStatus("Checked-in");

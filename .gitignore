@@ -26,6 +26,10 @@ __pycache__/
 
 *.db
 **/*.db
+*.db-shm
+*.db-wal
+**/*.db-shm
+**/*.db-wal
 ml/data/raw/
 ml/data/processed/
 ml/data/weather/

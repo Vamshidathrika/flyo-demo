@@ -16,6 +16,14 @@ public record AmadeusFlightOrderResponse(
         String errorCode,
         String errorMessage
 ) {
+    public String pnr() {
+        return bookingReference;
+    }
+
+    public List<String> errorMessages() {
+        return errorMessage != null ? List.of(errorMessage) : List.of();
+    }
+
     public static AmadeusFlightOrderResponse successful(String orderId, String pnr, String ticketingStatus,
                                                         String carrierCode, String flightNumber,
                                                         String passengerName, String ticketNumber,

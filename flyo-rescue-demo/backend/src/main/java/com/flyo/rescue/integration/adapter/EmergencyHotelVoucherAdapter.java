@@ -6,6 +6,8 @@ import com.flyo.rescue.integration.ProviderCategory;
 import com.flyo.rescue.integration.ProviderMetadata;
 import com.flyo.rescue.integration.dto.HotelReservationRequest;
 import com.flyo.rescue.integration.dto.HotelVoucherResult;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -13,6 +15,12 @@ import java.util.UUID;
 
 @Component
 public class EmergencyHotelVoucherAdapter implements HotelAccommodationProvider {
+
+    private final Environment environment;
+
+    public EmergencyHotelVoucherAdapter(@Autowired(required = false) Environment environment) {
+        this.environment = environment;
+    }
 
     private final ProviderMetadata metadata = new ProviderMetadata(
             "emergency_hotel_voucher",
@@ -32,6 +40,13 @@ public class EmergencyHotelVoucherAdapter implements HotelAccommodationProvider 
 
     @Override
     public HotelVoucherResult reserveEmergencyAccommodation(HotelReservationRequest request) {
+        if (environment != null && environment.matchesProfiles("prod")) {
+            return HotelVoucherResult.failed(
+                    "HOTEL_INTEGRATION_BLOCKED",
+                    "Emergency hotel API integration pending client partner contract onboarding."
+            );
+        }
+
         String voucherCode = "HTL-" + request.getAirportCity() + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         return HotelVoucherResult.success(
                 voucherCode,

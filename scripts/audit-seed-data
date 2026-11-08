@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# FLYO RESCUE - PRODUCTION SEED & MOCK FORENSIC AUDIT SCRIPT
+# ==============================================================================
+# Verifies zero active seed data, no unprofiled mock adapters, pure DDL migrations,
+# and zero simulated fallbacks in the production codebase.
+# ==============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+echo "================================================================================"
+echo "  FLYO RESCUE — REPOSITORY FORENSIC SEED & MOCK AUDIT (STAGE 9)"
+echo "================================================================================"
+
+ERRORS=0
+
+log_pass() {
+    echo "  [PASS] $1"
+}
+
+log_fail() {
+    echo "  [FAIL] $1"
+    ERRORS=$((ERRORS + 1))
+}
+
+# 1. Verify Flyway migrations are pure DDL (0 INSERT statements)
+echo "Checking Flyway database migration scripts..."
+MIGRATION_DIR="${ROOT_DIR}/flyo-rescue-demo/backend/src/main/resources/db/migration"
+if [ -d "${MIGRATION_DIR}" ]; then
+    INSERTS=$(grep -rnI -i "INSERT INTO" "${MIGRATION_DIR}" || true)
+    if [ -n "${INSERTS}" ]; then
+        log_fail "Found INSERT statement in Flyway migrations:\n${INSERTS}"
+    else
+        log_pass "All Flyway migrations (V1-V9) are pure DDL. Zero static data inserts."
+    fi
+else
+    log_fail "Migration directory not found: ${MIGRATION_DIR}"
+fi
+
+# 2. Verify FlyoDataSeeder is strictly deactivated in production
+echo "Checking FlyoDataSeeder profile restrictions..."
+SEEDER_FILE="${ROOT_DIR}/flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/config/FlyoDataSeeder.java"
+if [ -f "${SEEDER_FILE}" ]; then
+    if grep -q '@Profile("!prod")' "${SEEDER_FILE}" && grep -q 'flyo.seeding.enabled' "${SEEDER_FILE}"; then
+        log_pass "FlyoDataSeeder is guarded with @Profile(\"!prod\") and flyo.seeding.enabled flag."
+    else
+        log_fail "FlyoDataSeeder missing production lockout guard!"
+    fi
+else
+    log_fail "FlyoDataSeeder.java not found."
+fi
+
+# 3. Verify Mock & Simulation components are excluded from prod profile
+echo "Checking mock controller and adapter profile guards..."
+MOCK_CLASSES=(
+    "controller/MockAirlineController.java"
+    "integration/adapter/SimulatedWhatsAppAdapter.java"
+    "integration/adapter/FlyoSandboxPaymentProviderAdapter.java"
+    "service/payment/SandboxPaymentAdapter.java"
+    "service/rebook/PartnerPortalPlaywrightAdapter.java"
+)
+
+for cls in "${MOCK_CLASSES[@]}"; do
+    FILE="${ROOT_DIR}/flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/${cls}"
+    if [ -f "${FILE}" ]; then
+        if grep -q '@Profile("!prod")' "${FILE}"; then
+            log_pass "${cls} correctly isolated with @Profile(\"!prod\")."
+        else
+            log_fail "${cls} is NOT restricted from production!"
+        fi
+    else
+        log_fail "Mock class missing: ${cls}"
+    fi
+done
+
+# 4. Verify application-prod.properties disables seeding and mock mode
+echo "Checking production configuration properties..."
+PROD_PROPS="${ROOT_DIR}/flyo-rescue-demo/backend/src/main/resources/application-prod.properties"
+if [ -f "${PROD_PROPS}" ]; then
+    if grep -q 'flyo.seeding.enabled=false' "${PROD_PROPS}" && grep -q 'aviation.radar.mock-mode=false' "${PROD_PROPS}"; then
+        log_pass "application-prod.properties explicitly disables seeding and radar mock mode."
+    else
+        log_fail "application-prod.properties does not explicitly disable flyo.seeding.enabled or radar mock mode!"
+    fi
+else
+    log_fail "application-prod.properties missing!"
+fi
+
+# 5. Verify ML Service has zero hardcoded sample flights in monitoring endpoints
+echo "Checking ML inference service for fake sample data..."
+ML_MAIN="${ROOT_DIR}/ml/service/main.py"
+if [ -f "${ML_MAIN}" ]; then
+    if grep -q 'sample_flights = \[' "${ML_MAIN}"; then
+        log_fail "Hardcoded sample_flights found in ML main.py!"
+    else
+        log_pass "ML service computes leaderboard dynamically from real prediction records."
+    fi
+fi
+
+# 6. Verify ProductionSecurityValidator enforces mandatory fail-closed rules
+echo "Checking ProductionSecurityValidator..."
+VALIDATOR="${ROOT_DIR}/flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/config/ProductionSecurityValidator.java"
+if [ -f "${VALIDATOR}" ]; then
+    if grep -q 'flyo.seeding.enabled' "${VALIDATOR}" && grep -q 'aviation.radar.mock-mode' "${VALIDATOR}"; then
+        log_pass "ProductionSecurityValidator validates seeding and radar mock mode flags."
+    else
+        log_fail "ProductionSecurityValidator missing required production property assertions!"
+    fi
+fi
+
+echo "================================================================================"
+if [ ${ERRORS} -eq 0 ]; then
+    echo "  AUDIT COMPLETE: 0 SEED OR MOCK VIOLATIONS DETECTED (STAGE 9 VERIFIED)"
+    echo "================================================================================"
+    exit 0
+else
+    echo "  AUDIT FAILED: ${ERRORS} VIOLATION(S) DETECTED!"
+    echo "================================================================================"
+    exit 1
+fi

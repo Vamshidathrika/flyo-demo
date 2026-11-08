@@ -1,18 +1,23 @@
 package com.flyo.rescue.config;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 @Configuration
 @ConfigurationProperties(prefix = "aviation.radar")
 public class AviationRadarConfig {
 
+    @Autowired(required = false)
+    private Environment environment;
+
     private boolean enabled = true;
-    private String provider = "aviationstack"; // aviationstack, flightaware, cirium, mock
+    private String provider = "aviationstack"; // aviationstack, flightaware, cirium
     private String apiKey = "";
     private String baseUrl = "https://api.aviationstack.com/v1";
     private int pollIntervalSeconds = 60;
-    private boolean mockMode = true;
+    private boolean mockMode = false;
 
     public boolean isEnabled() {
         return enabled;
@@ -36,7 +41,6 @@ public class AviationRadarConfig {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
-        this.mockMode = apiKey == null || apiKey.isBlank();
     }
 
     public String getBaseUrl() {
@@ -56,7 +60,10 @@ public class AviationRadarConfig {
     }
 
     public boolean isMockMode() {
-        return mockMode || apiKey == null || apiKey.isBlank();
+        if (environment != null && environment.matchesProfiles("prod")) {
+            return false; // Mock mode is strictly forbidden in production
+        }
+        return mockMode;
     }
 
     public void setMockMode(boolean mockMode) {

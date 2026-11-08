@@ -27,9 +27,9 @@
                 </div>
                 <div class="header-status">
                     <span class="status-indicator" id="portal-indicator"></span>
-                    <span class="status-text" id="portal-status-label">Mock Airline: OPERATIONAL</span>
-                    <button id="toggle-portal-btn" onclick="toggleMockPortal()" style="margin-left: 0.5rem; font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        Simulate 500 Outage
+                    <span class="status-text" id="portal-status-label">Provider Engine: CONNECTED</span>
+                    <button id="toggle-portal-btn" onclick="toggleMockPortal()" style="display: none; margin-left: 0.5rem; font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.55rem; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Simulate Outage
                     </button>
                 </div>
             </div>
@@ -56,7 +56,7 @@
                         Audit Logs <span class="tab-badge tab-badge-count" id="tab-logs-count">0</span>
                     </button>
                     <button class="platform-tab-btn" id="tab-monitoring" onclick="switchSectionView('monitoring')">
-                        ML Observability <span class="tab-badge" id="tab-ml-status-badge" style="background: #0284c7; color: white;">v2</span>
+                        ML Observability <span class="tab-badge" id="tab-ml-status-badge" style="background: #0284c7; color: white;">v3</span>
                     </button>
                     <button class="platform-tab-btn" id="tab-ops" onclick="switchSectionView('ops')">
                         Operations Control <span class="tab-badge" id="tab-ops-badge" style="background: #059669; color: white;">Live</span>
@@ -143,7 +143,6 @@
                                 <button class="btn btn-secondary" onclick="openIngestModal()" style="background: #059669; color: white; border: none; font-weight: 600;">Ingest PNR/Email</button>
                                 <button class="btn btn-secondary" onclick="openRadarAlertModal()" style="background: #d97706; color: white; border: none; font-weight: 600;">Radar Alert Webhook</button>
                                 <button class="btn btn-secondary" onclick="clearAllBookingsPrompt()">Clear All</button>
-                                <button class="btn btn-secondary" onclick="resetSeedBookingsPrompt()">Reset Sample</button>
                                 <button class="btn btn-secondary" id="refresh-btn" onclick="fetchBookings()">
                                     Refresh
                                 </button>
@@ -154,7 +153,7 @@
                         <div class="disruption-summary-bar" id="disruption-summary-bar">
                             <div class="summary-stat-item">
                                 <span class="summary-stat-label">Monitored Trips</span>
-                                <span class="summary-stat-val" id="summary-total-trips">5 Active</span>
+                                <span class="summary-stat-val" id="summary-total-trips">0 Active</span>
                             </div>
                             <div class="summary-stat-divider"></div>
                             <div class="summary-stat-item stat-blocked" id="summary-stat-blocked">
@@ -351,7 +350,7 @@
                                 <span class="badge" id="rescued-correlation-badge" style="background: #475569; color: white; display: none;">Trace: None</span>
                             </div>
                             <div class="screenshot-tray" id="screenshot-tray">
-                                <span style="font-size: 0.8rem; font-weight: 600; color: #166534;">Automated Playwright Audit Trail: 4 Steps Verified (Search &rarr; Select &rarr; Confirm &rarr; Confirmed)</span>
+                                <span style="font-size: 0.8rem; font-weight: 600; color: #166534;" id="booking-audit-trail-label">Provider Verified Reservation &middot; Order Confirmed &middot; E-Ticket Issued</span>
                             </div>
                         </div>
 
@@ -360,7 +359,7 @@
                             <div class="rebook-failure-header">
                                 <div>
                                     <h3 style="color: #9f1239; font-size: 1.15rem; font-weight: 800;">Automated Rebooking Failed &mdash; 3 Retries Exhausted</h3>
-                                    <p style="color: #be123c; font-size: 0.85rem;">Mock airline portal reservation gateway returned an error. No PNR generated.</p>
+                                    <p style="color: #be123c; font-size: 0.85rem;">Airline reservation gateway returned an error. No PNR generated.</p>
                                 </div>
                             </div>
                             <div class="failure-details-box">
@@ -445,7 +444,7 @@
                                 </div>
 
                                 <div class="options-list" id="options-list">
-                                    <!-- Options injected dynamically by app.3e0037d01e.min.js -->
+                                    <!-- Options injected dynamically by app.4772c7c24d.min.js -->
                                 </div>
                             </div>
 
@@ -585,7 +584,7 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                             <div style="display: flex; align-items: center; gap: 0.6rem;">
                                 <span style="background: #15803d; color: white; font-size: 0.72rem; font-weight: 750; padding: 0.2rem 0.55rem; border-radius: 4px; letter-spacing: 0.03em;">
-                                    ML OBSERVABILITY &middot; V2 MULTISEASON
+                                    ML OBSERVABILITY &middot; V3 AVIATION INTELLIGENCE
                                 </span>
                                 <strong style="color: #166534; font-size: 0.95rem;">Model Monitoring &amp; Prediction Quality Governance</strong>
                             </div>
@@ -594,7 +593,7 @@
                                     Circuit: CLOSED (0 Failures)
                                 </span>
                                 <span class="badge" id="ml-version-badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700; border: 1px solid #7dd3fc;">
-                                    v2.0.0-multiseason
+                                    v3.0.0-aviation-intelligence
                                 </span>
                                 <button class="btn btn-secondary btn-sm" onclick="fetchMonitoringData(true)" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">
                                     ↻ Refresh Telemetry
@@ -670,9 +669,11 @@
                                     <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Live Prediction Tester</h3>
                                     <p class="section-desc" style="font-size: 0.75rem; margin: 0.15rem 0 0;">Test real model inference, geofencing &amp; circuit breaker fallback</p>
                                 </div>
-                                <div style="display: flex; gap: 0.35rem;">
-                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('UA240')">UA240 (ORD-SFO)</button>
+                                <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                                     <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('6E501')">6E501 (DEL-BOM)</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('AI839')">AI839 (HYD-DEL)</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('UK927')">UK927 (BOM-BLR)</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('UA240')">UA240 (ORD-SFO)</button>
                                     <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('SY350')">SY350 (ORD-DFW)</button>
                                 </div>
                             </div>
@@ -919,6 +920,109 @@
                                         <tr>
                                             <td colspan="6" class="loading-state" style="text-align: center; color: #64748b; padding: 1.5rem;">
                                                 Loading manual intervention cases...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Stage 8: Predictive Operations Intelligence & Risk Leaderboard -->
+                    <section class="card" style="margin-bottom: 1.5rem;">
+                        <div class="card-header" style="padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem;">
+                                    <span style="background: #0284c7; color: white; font-size: 0.68rem; font-weight: 750; padding: 0.15rem 0.45rem; border-radius: 4px;">STAGE 8 ML</span>
+                                    <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Flight Disruption Risk Leaderboard</h3>
+                                </div>
+                                <p class="section-desc" style="font-size: 0.75rem; margin: 0;">Prioritized operational flights ranked by calibrated disruption probability &amp; affected passengers</p>
+                            </div>
+                            <div>
+                                <button class="btn btn-secondary btn-sm" onclick="fetchPredictiveLeaderboard()" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;">↻ Refresh Leaderboard</button>
+                            </div>
+                        </div>
+                        <div style="padding: 0.5rem 1rem 1rem;">
+                            <div class="table-container">
+                                <table class="data-table" style="font-size: 0.8rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Flight</th>
+                                            <th>Route</th>
+                                            <th>Sched Dep</th>
+                                            <th>Disruption Prob</th>
+                                            <th>Delay Interval (P10-P90)</th>
+                                            <th>Risk Tier</th>
+                                            <th>Pax at Risk</th>
+                                            <th>Primary SHAP Factor</th>
+                                            <th>Weather Hazards</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ops-leaderboard-tbody">
+                                        <tr>
+                                            <td colspan="9" class="loading-state" style="text-align: center; color: #64748b; padding: 1.5rem;">
+                                                Loading flight risk leaderboard...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Stage 8: Regional Airport Disruption & Weather Heatmap -->
+                    <section class="card" style="margin-bottom: 1.5rem;">
+                        <div class="card-header" style="padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem;">
+                                    <span style="background: #7c3aed; color: white; font-size: 0.68rem; font-weight: 750; padding: 0.15rem 0.45rem; border-radius: 4px;">REGIONAL RADAR</span>
+                                    <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Airport Disruption &amp; Congestion Heatmap</h3>
+                                </div>
+                                <p class="section-desc" style="font-size: 0.75rem; margin: 0;">Live regional congestion telemetry across Indian priority hubs and global connection gateways</p>
+                            </div>
+                            <div>
+                                <button class="btn btn-secondary btn-sm" onclick="fetchAirportHeatmap()" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;">↻ Refresh Heatmap</button>
+                            </div>
+                        </div>
+                        <div style="padding: 1rem;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.75rem;" id="ops-heatmap-grid">
+                                <!-- Hub cards dynamically rendered here -->
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Stage 8: Passenger Connection-Risk & MCT Desk -->
+                    <section class="card" style="margin-bottom: 1.5rem;">
+                        <div class="card-header" style="padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem;">
+                                    <span style="background: #ea580c; color: white; font-size: 0.68rem; font-weight: 750; padding: 0.15rem 0.45rem; border-radius: 4px;">PASSENGER IMPACT</span>
+                                    <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Tight Connection &amp; MCT Failure Queue</h3>
+                                </div>
+                                <p class="section-desc" style="font-size: 0.75rem; margin: 0;">Airport-specific Minimum Connecting Time (MCT) buffers &amp; proactive rebooking holds</p>
+                            </div>
+                            <div>
+                                <button class="btn btn-secondary btn-sm" onclick="fetchConnectionRiskQueue()" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;">↻ Refresh Connections</button>
+                            </div>
+                        </div>
+                        <div style="padding: 0.5rem 1rem 1rem;">
+                            <div class="table-container">
+                                <table class="data-table" style="font-size: 0.8rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Hub</th>
+                                            <th>Inbound / Outbound</th>
+                                            <th>Connect Window</th>
+                                            <th>MCT Standard</th>
+                                            <th>Margin Buffer</th>
+                                            <th>Miss Probability</th>
+                                            <th>Recommended Proactive Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ops-connections-tbody">
+                                        <tr>
+                                            <td colspan="7" class="loading-state" style="text-align: center; color: #64748b; padding: 1.5rem;">
+                                                Loading passenger connection risks...
                                             </td>
                                         </tr>
                                     </tbody>

@@ -32,7 +32,7 @@ public class PnrIngestionService {
 
         String pnr = extractPattern(rawText, "(?i)\\b(?:PNR|Record Locator|RLOC|Booking Ref(?:erence)?):?\\s*([A-Z0-9-]{5,10})\\b")
                 .or(() -> extractPattern(rawText, "(?i)\\bConfirmation(?: Code)?:?\\s*([A-Z0-9-]{5,10})\\b"))
-                .orElse("PNR" + UUID.randomUUID().toString().substring(0, 4).toUpperCase());
+                .orElseThrow(() -> new IllegalArgumentException("Unable to extract valid PNR booking reference from provided payload."));
 
         String rawPassenger = extractPattern(rawText, "(?i)(?:Passenger(?: Name)?|PAX|Traveler|Name):?\\s*([A-Za-z\\s/]+?)(?=\\s*(?:\\n|\\r|PNR|Flight|Route|Ticket|Date|$))")
                 .or(() -> extractPattern(rawText, "(?i)([A-Za-z]+/[A-Za-z]+(?:\\s+(?:MR|MRS|MS|DR|PROF))?)"))
@@ -42,12 +42,14 @@ public class PnrIngestionService {
         String flight = extractPattern(rawText, "(?i)(?:Flight(?: Number)?):?\\s*([A-Z0-9]{2}[-\\s]?[0-9]{3,4})")
                 .or(() -> extractPattern(rawText, "\\b([A-Z]{2}[-\\s]?[0-9]{3,4})\\b"))
                 .map(this::normalizeFlightNumber)
-                .orElse("AI-101");
+                .orElseThrow(() -> new IllegalArgumentException("Unable to extract flight number from booking text."));
 
         String route = extractRoute(rawText)
-                .orElse("HYD → DEL");
+                .orElseThrow(() -> new IllegalArgumentException("Unable to extract origin and destination flight route from booking text."));
 
         String dateTime = extractPattern(rawText, "(?i)(?:Departure|Departs|Date/Time|Date|Time):?\\s*([^\\n\\r]+)")
+                .or(() -> extractPattern(rawText, "(?i)\\b(\\d{1,2}[A-Z]{3}\\s+[A-Z]{6}\\s+[A-Z0-9]{3}\\s+\\d{4})"))
+                .or(() -> extractPattern(rawText, "(?i)\\b(\\d{1,2}[A-Z]{3}\\b.*?\\b\\d{4}\\b)"))
                 .map(String::trim)
                 .orElse("Tonight 21:00");
 

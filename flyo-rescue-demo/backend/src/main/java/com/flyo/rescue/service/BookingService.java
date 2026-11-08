@@ -21,9 +21,12 @@ public class BookingService {
     private static final Logger log = LoggerFactory.getLogger(BookingService.class);
 
     private final BookingRepository bookingRepository;
+    private final org.springframework.core.env.Environment environment;
 
-    public BookingService(BookingRepository bookingRepository) {
+    public BookingService(BookingRepository bookingRepository,
+                          org.springframework.core.env.Environment environment) {
         this.bookingRepository = bookingRepository;
+        this.environment = environment;
     }
 
     private boolean isGlobalAdmin() {
@@ -42,11 +45,7 @@ public class BookingService {
         } else {
             list = new java.util.ArrayList<>(bookingRepository.findByTenantIdOrderByIdAsc(tenantId));
         }
-        list.sort((a, b) -> {
-            if ("B1".equalsIgnoreCase(a.getId())) return -1;
-            if ("B1".equalsIgnoreCase(b.getId())) return 1;
-            return a.getId().compareToIgnoreCase(b.getId());
-        });
+        list.sort(java.util.Comparator.comparing(Booking::getId));
         return list;
     }
 
@@ -65,10 +64,10 @@ public class BookingService {
 
     public Booking saveBooking(Booking booking) {
         if (booking.getId() == null || booking.getId().isBlank()) {
-            booking.setId("B-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());
+            booking.setId("B-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         }
         if (booking.getPnr() == null || booking.getPnr().isBlank()) {
-            booking.setPnr("PNR" + UUID.randomUUID().toString().substring(0, 4).toUpperCase());
+            throw new IllegalArgumentException("PNR booking reference is mandatory. Never persist bookings without authoritative reference.");
         }
         if (booking.getAgency() == null || booking.getAgency().isBlank()) {
             booking.setAgency("Flyo");
@@ -100,6 +99,9 @@ public class BookingService {
 
     @Transactional
     public void clearAllBookings() {
+        if (environment != null && environment.matchesProfiles("prod")) {
+            throw new UnsupportedOperationException("Production data clear is strictly prohibited.");
+        }
         if (isGlobalAdmin()) {
             bookingRepository.deleteAll();
         } else {
@@ -111,6 +113,9 @@ public class BookingService {
 
     @Transactional
     public List<Booking> resetSeedBookings() {
+        if (environment != null && environment.matchesProfiles("prod")) {
+            throw new UnsupportedOperationException("Production seed reset is strictly prohibited.");
+        }
         String currentTenant = TenantContext.getTenantId();
         if (isGlobalAdmin()) {
             bookingRepository.deleteAll();

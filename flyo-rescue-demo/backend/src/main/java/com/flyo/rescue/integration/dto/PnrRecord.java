@@ -51,4 +51,6 @@ public class PnrRecord {
     public void setCouponStatus(String couponStatus) { this.couponStatus = couponStatus; }
     public String getBookingStatus() { return bookingStatus; }
     public void setBookingStatus(String bookingStatus) { this.bookingStatus = bookingStatus; }
+    public String getStatus() { return bookingStatus; }
+    public void setStatus(String status) { this.bookingStatus = status; }
 }

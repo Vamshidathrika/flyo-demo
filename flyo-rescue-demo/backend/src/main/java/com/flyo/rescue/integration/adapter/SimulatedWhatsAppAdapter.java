@@ -8,11 +8,13 @@ import com.flyo.rescue.integration.dto.MessageDeliveryRequest;
 import com.flyo.rescue.integration.dto.MessageDeliveryResult;
 import com.flyo.rescue.model.SimulatedMessage;
 import com.flyo.rescue.service.MessageService;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
+@Profile("!prod")
 public class SimulatedWhatsAppAdapter implements MessagingProvider {
 
     private final MessageService messageService;

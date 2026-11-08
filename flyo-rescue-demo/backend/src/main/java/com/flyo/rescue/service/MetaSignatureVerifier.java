@@ -1,5 +1,7 @@
 package com.flyo.rescue.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Mac;
@@ -10,9 +12,15 @@ import java.security.MessageDigest;
 @Component
 public class MetaSignatureVerifier {
 
+    @Autowired(required = false)
+    private Environment environment;
+
     public boolean verifySignature(String payload, String signatureHeader, String appSecret) {
         if (appSecret == null || appSecret.isBlank()) {
-            return true; // Dev / Mock mode
+            if (environment != null && environment.matchesProfiles("prod")) {
+                return false; // Fail closed in production: unauthenticated webhooks are rejected
+            }
+            return true; // Dev / Mock mode for isolated test suites
         }
         if (signatureHeader == null || !signatureHeader.startsWith("sha256=")) {
             return false;

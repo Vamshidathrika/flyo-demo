@@ -1,10 +1,7 @@
 package com.flyo.rescue.controller;
 
 import com.flyo.rescue.client.PredictionServiceClient;
-import com.flyo.rescue.dto.AirportWeatherTelemetry;
-import com.flyo.rescue.dto.FlightPredictionRequestDto;
-import com.flyo.rescue.dto.FlightPredictionResponseDto;
-import com.flyo.rescue.dto.ReconciledFlightEvidence;
+import com.flyo.rescue.dto.*;
 import com.flyo.rescue.service.AviationNewsIntelligenceService;
 import com.flyo.rescue.service.FlightEvidenceReconciliationService;
 import com.flyo.rescue.service.OpenMeteoWeatherService;
@@ -12,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -93,8 +91,81 @@ public class AviationIntelligenceController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/intelligence/predict/delay-forecast")
+    public ResponseEntity<DelayForecastResponseDto> predictDelayForecast(
+            @RequestBody DelayForecastRequestDto request) {
+        DelayForecastResponseDto response = predictionServiceClient.predictDelayForecast(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/intelligence/predict/delay-forecast")
+    public ResponseEntity<DelayForecastResponseDto> getDelayForecast(
+            @RequestParam(defaultValue = "6E-501") String flightNumber,
+            @RequestParam(defaultValue = "6E") String carrierCode,
+            @RequestParam(defaultValue = "DEL") String originAirport,
+            @RequestParam(defaultValue = "BOM") String destAirport,
+            @RequestParam(defaultValue = "07:15") String scheduledDepTime,
+            @RequestParam(defaultValue = "T_MINUS_2H") String horizon) {
+        DelayForecastRequestDto request = new DelayForecastRequestDto(
+                flightNumber, carrierCode, originAirport, destAirport, scheduledDepTime
+        );
+        request.setOperationalHorizon(horizon);
+        return ResponseEntity.ok(predictionServiceClient.predictDelayForecast(request));
+    }
+
+    @PostMapping("/intelligence/predict/connection-risk")
+    public ResponseEntity<ConnectionRiskResponseDto> evaluateConnectionRisk(
+            @RequestBody ConnectionRiskRequestDto request) {
+        ConnectionRiskResponseDto response = predictionServiceClient.evaluateConnectionRisk(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/intelligence/predict/connection-risk")
+    public ResponseEntity<ConnectionRiskResponseDto> getConnectionRisk(
+            @RequestParam(defaultValue = "DEL") String airportCode,
+            @RequestParam(defaultValue = "6E-501") String inboundFlight,
+            @RequestParam(defaultValue = "6E-204") String outboundFlight,
+            @RequestParam(defaultValue = "55") Integer scheduledConnectionMinutes,
+            @RequestParam(defaultValue = "35.0") Double predictedInboundDelayMinutes) {
+        ConnectionRiskRequestDto request = new ConnectionRiskRequestDto(
+                airportCode, inboundFlight, outboundFlight, scheduledConnectionMinutes, predictedInboundDelayMinutes
+        );
+        return ResponseEntity.ok(predictionServiceClient.evaluateConnectionRisk(request));
+    }
+
+    @PostMapping("/intelligence/predict/passenger-impact")
+    public ResponseEntity<PassengerImpactResponseDto> estimatePassengerImpact(
+            @RequestBody PassengerImpactRequestDto request) {
+        PassengerImpactResponseDto response = predictionServiceClient.estimatePassengerImpact(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/intelligence/predict/passenger-impact")
+    public ResponseEntity<PassengerImpactResponseDto> getPassengerImpact(
+            @RequestParam(defaultValue = "6E-501") String flightNumber,
+            @RequestParam(defaultValue = "6E") String carrierCode,
+            @RequestParam(defaultValue = "DEL") String originAirport,
+            @RequestParam(defaultValue = "BOM") String destAirport,
+            @RequestParam(defaultValue = "0.39") Double disruptionProbability,
+            @RequestParam(defaultValue = "50.0") Double expectedDelayMinutes) {
+        PassengerImpactRequestDto request = new PassengerImpactRequestDto(
+                flightNumber, carrierCode, originAirport, destAirport, disruptionProbability, expectedDelayMinutes
+        );
+        return ResponseEntity.ok(predictionServiceClient.estimatePassengerImpact(request));
+    }
+
+    @GetMapping("/intelligence/monitoring/leaderboard")
+    public ResponseEntity<Map<String, Object>> getRiskLeaderboard() {
+        return ResponseEntity.ok(predictionServiceClient.getRiskLeaderboard());
+    }
+
+    @GetMapping("/intelligence/monitoring/heatmap")
+    public ResponseEntity<Map<String, Object>> getAirportHeatmap() {
+        return ResponseEntity.ok(predictionServiceClient.getAirportHeatmap());
+    }
+
     @GetMapping("/intelligence/monitoring/summary")
-    public ResponseEntity<java.util.Map<String, Object>> getMonitoringSummary() {
+    public ResponseEntity<Map<String, Object>> getMonitoringSummary() {
         return ResponseEntity.ok(predictionServiceClient.getMonitoringSummary());
     }
 }

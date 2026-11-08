@@ -23,11 +23,15 @@ public class MetaWhatsAppClient {
     private final WhatsAppChatLogService chatLogService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient;
+    private final org.springframework.core.env.Environment environment;
     private volatile String lastDispatchedMessageId;
 
-    public MetaWhatsAppClient(WhatsAppConfig config, WhatsAppChatLogService chatLogService) {
+    public MetaWhatsAppClient(WhatsAppConfig config,
+                              WhatsAppChatLogService chatLogService,
+                              @org.springframework.beans.factory.annotation.Autowired(required = false) org.springframework.core.env.Environment environment) {
         this.config = config;
         this.chatLogService = chatLogService;
+        this.environment = environment;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
@@ -45,6 +49,10 @@ public class MetaWhatsAppClient {
         chatLogService.logOutbound(cleanPhone, text, null);
 
         if (!isConfigured()) {
+            if (environment != null && environment.matchesProfiles("prod")) {
+                log.error("[Meta WhatsApp Outbound] Message delivery failed in production: Meta Cloud API credentials not configured.");
+                return false;
+            }
             log.info("[Meta WhatsApp Outbound] Mock mode active: message logged without remote HTTP dispatch.");
             return true;
         }
@@ -72,6 +80,10 @@ public class MetaWhatsAppClient {
         chatLogService.logOutbound(cleanPhone, bodyText, buttons);
 
         if (!isConfigured()) {
+            if (environment != null && environment.matchesProfiles("prod")) {
+                log.error("[Meta WhatsApp Outbound Interactive] Message delivery failed in production: Meta Cloud API credentials not configured.");
+                return false;
+            }
             log.info("[Meta WhatsApp Outbound] Mock mode active: interactive message logged locally.");
             return true;
         }
@@ -148,7 +160,9 @@ public class MetaWhatsAppClient {
     }
 
     private String cleanPhoneNumber(String phone) {
-        if (phone == null) return "919876543210";
+        if (phone == null || phone.isBlank()) {
+            throw new IllegalArgumentException("Recipient phone number is mandatory for WhatsApp dispatch.");
+        }
         return phone.replaceAll("[^0-9]", "");
     }
 }

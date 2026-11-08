@@ -22,6 +22,7 @@ public class AviationNewsIntelligenceService {
     private static final long CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
     private final HttpClient httpClient;
+    private final org.springframework.core.env.Environment environment;
     private List<AviationHeadline> cachedHeadlines = new ArrayList<>();
     private long lastFetchEpochMs = 0;
 
@@ -55,7 +56,8 @@ public class AviationNewsIntelligenceService {
         }
     }
 
-    public AviationNewsIntelligenceService() {
+    public AviationNewsIntelligenceService(@org.springframework.beans.factory.annotation.Autowired(required = false) org.springframework.core.env.Environment environment) {
+        this.environment = environment;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(3))
                 .build();
@@ -87,10 +89,15 @@ public class AviationNewsIntelligenceService {
                 }
             }
         } catch (Exception e) {
-            log.warn("[Aviation News] Failed to fetch live RSS feed ({}), serving operational bulletins.", e.getMessage());
+            log.warn("[Aviation News] Failed to fetch live RSS feed: {}", e.getMessage());
         }
 
-        // Return curated operational bulletin fallback
+        if (environment != null && environment.matchesProfiles("prod")) {
+            log.warn("[Aviation News] Live news feed unavailable. Zero synthetic headlines returned in production.");
+            return List.of();
+        }
+
+        // Return curated operational bulletin fallback for dev/test
         if (cachedHeadlines.isEmpty()) {
             cachedHeadlines = getCuratedBulletins();
             lastFetchEpochMs = System.currentTimeMillis();

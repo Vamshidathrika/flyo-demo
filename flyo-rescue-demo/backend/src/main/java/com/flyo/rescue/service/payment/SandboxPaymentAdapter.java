@@ -8,6 +8,7 @@ import com.flyo.rescue.service.AuditService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,13 +17,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Production-ready Sandbox Payment Adapter with strict tokenization,
+ * Development & Test Sandbox Payment Adapter with strict tokenization,
  * masked PANs, and airline MCC (3000-3350) spending limits.
  *
  * Adheres to PCI-DSS v4.0 Requirement 3.2: Never persists CVV/CVC.
+ * Strictly isolated to non-production environments (!prod).
  */
 @Component
 @Primary
+@Profile("!prod")
 public class SandboxPaymentAdapter implements PaymentGatewayAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(SandboxPaymentAdapter.class);

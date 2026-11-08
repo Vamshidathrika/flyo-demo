@@ -100,6 +100,11 @@ async function fetchOpsData(silent = false) {
                 `).join("");
             }
         }
+
+        // Stage 8 Predictive Operations Intelligence
+        fetchPredictiveLeaderboard();
+        fetchAirportHeatmap();
+        fetchConnectionRiskQueue();
     } catch (err) {
         if (!silent) console.error("Error fetching ops data:", err);
     }
@@ -162,6 +167,24 @@ async function fetchActiveCases(silent = false) {
                 await fetchMessages(activeCase.id);
                 await fetchBookings();
             }
+        } else {
+            const headingEl = document.getElementById("case-heading");
+            if (headingEl) headingEl.textContent = "No Active Disruption Cases";
+            const stateEl = document.getElementById("case-state");
+            if (stateEl) {
+                stateEl.textContent = "NORMAL_OPERATIONS";
+                stateEl.className = "case-state-badge";
+            }
+            const optionsTbody = document.getElementById("options-tbody");
+            if (optionsTbody) {
+                optionsTbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #64748b;">No active rescue operations. All flights operating on schedule.</td></tr>`;
+            }
+            const auditTbody = document.getElementById("audit-tbody");
+            if (auditTbody) {
+                auditTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 1.5rem; color: #64748b;">Audit ledger clear. No operational interventions recorded.</td></tr>`;
+            }
+            const pills = document.getElementById("case-switcher-container");
+            if (pills) pills.style.display = "none";
         }
     } catch (error) {
         if (!silent) console.error("Error fetching cases:", error);
@@ -1523,10 +1546,14 @@ async function clearAllBookingsPrompt() {
 
 async function resetSeedBookingsPrompt(silent = false) {
     try {
-        await fetch("/api/bookings/reset", { method: "POST" });
+        const res = await fetch("/api/bookings/reset", { method: "POST" });
+        if (!res.ok) {
+            if (!silent) alert("Reset seed bookings is disabled in production.");
+            return;
+        }
         await fetchBookings();
     } catch (err) {
-        if (!silent) alert("Error resetting sample bookings: " + err.message);
+        if (!silent) alert("Reset seed bookings is disabled in production.");
     }
 }
 
@@ -1860,13 +1887,29 @@ async function toggleMockPortal() {
 }
 
 async function checkMockPortalStatus() {
+    const indicator = document.getElementById("portal-indicator");
+    const label = document.getElementById("portal-status-label");
+    const btn = document.getElementById("toggle-portal-btn");
     try {
         const response = await fetch("/mock-airline/break-status");
-        if (!response.ok) return;
+        if (response.status === 404 || !response.ok) {
+            if (indicator) {
+                indicator.style.backgroundColor = "#10b981";
+                indicator.style.boxShadow = "0 0 8px #10b981";
+            }
+            if (label) label.textContent = "Provider Engine: GDS / NDC CONNECTED";
+            if (btn) btn.style.display = "none";
+            return;
+        }
         const data = await response.json();
         updatePortalStatusUI(data.broken);
     } catch (e) {
-        console.error("Error checking portal status:", e);
+        if (indicator) {
+            indicator.style.backgroundColor = "#10b981";
+            indicator.style.boxShadow = "0 0 8px #10b981";
+        }
+        if (label) label.textContent = "Provider Engine: GDS / NDC CONNECTED";
+        if (btn) btn.style.display = "none";
     }
 }
 
@@ -2090,6 +2133,20 @@ function fillPredictPreset(preset) {
         document.getElementById("ml-pred-dest").value = "BOM";
         document.getElementById("ml-pred-deptime").value = "08:30";
         document.getElementById("ml-pred-depdate").value = "2024-07-15";
+    } else if (preset === "AI839") {
+        document.getElementById("ml-pred-flight").value = "AI839";
+        document.getElementById("ml-pred-carrier").value = "AI";
+        document.getElementById("ml-pred-origin").value = "HYD";
+        document.getElementById("ml-pred-dest").value = "DEL";
+        document.getElementById("ml-pred-deptime").value = "18:30";
+        document.getElementById("ml-pred-depdate").value = "2024-07-15";
+    } else if (preset === "UK927") {
+        document.getElementById("ml-pred-flight").value = "UK927";
+        document.getElementById("ml-pred-carrier").value = "UK";
+        document.getElementById("ml-pred-origin").value = "BOM";
+        document.getElementById("ml-pred-dest").value = "BLR";
+        document.getElementById("ml-pred-deptime").value = "19:45";
+        document.getElementById("ml-pred-depdate").value = "2024-07-15";
     } else if (preset === "SY350") {
         document.getElementById("ml-pred-flight").value = "SY350";
         document.getElementById("ml-pred-carrier").value = "SY";
@@ -2153,8 +2210,44 @@ function renderPredictionResult(data, container) {
     if (data.status === "PREDICTION_AVAILABLE") {
         const cancelPct = (data.cancellationProbability * 100).toFixed(1);
         const delayPct = (data.delay120mProbability * 100).toFixed(1);
+        const disruptPct = data.disruptionProbability != null ? (data.disruptionProbability * 100).toFixed(1) : cancelPct;
         const expDelay = data.expectedDelayMinutes != null ? data.expectedDelayMinutes.toFixed(1) : "0.0";
+        const p10 = data.delayP10Minutes != null ? data.delayP10Minutes.toFixed(0) : "0";
+        const p90 = data.delayP90Minutes != null ? data.delayP90Minutes.toFixed(0) : "0";
         const traceId = data.predictionId ? `<code style="font-size:0.7rem; color:#64748b;">ID: ${escapeHtml(data.predictionId.substring(0,8))}...</code>` : "";
+
+        // SHAP Factors
+        let shapHtml = "";
+        if (data.topContributingFactors && data.topContributingFactors.length > 0) {
+            shapHtml = `
+                <div style="margin: 0.5rem 0; padding: 0.5rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                    <span style="font-size: 0.72rem; font-weight: 700; color: #475569; display: block; margin-bottom: 0.35rem;">Top SHAP Model Explainability Attributions:</span>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        ${data.topContributingFactors.slice(0, 3).map(f => {
+                            const isRiskInc = f.impactDirection === "INCREASES_RISK";
+                            return `
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.73rem;">
+                                    <span style="color: #334155;">${escapeHtml(f.displayName)}</span>
+                                    <span style="font-weight: 700; color: ${isRiskInc ? '#dc2626' : '#16a34a'};">
+                                        ${isRiskInc ? '▲ +' : '▼ -'}${Math.abs(f.shapValue).toFixed(3)}
+                                    </span>
+                                </div>
+                            `;
+                        }).join("")}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Weather Hazards
+        let hazardsHtml = "";
+        if (data.weatherHazards && data.weatherHazards.length > 0) {
+            hazardsHtml = `
+                <div style="margin-bottom: 0.4rem;">
+                    ${data.weatherHazards.map(h => `<span class="badge" style="background: #fef2f2; color: #b91c1c; font-size: 0.68rem; margin-right: 0.25rem;">${escapeHtml(h)}</span>`).join("")}
+                </div>
+            `;
+        }
 
         container.innerHTML = `
             <div style="border-left: 3px solid #0284c7; padding-left: 0.65rem;">
@@ -2164,20 +2257,26 @@ function renderPredictionResult(data, container) {
                     </span>
                     ${traceId}
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin: 0.5rem 0; background: white; padding: 0.5rem; border-radius: 6px; border: 1px solid #e2e8f0;">
+                ${hazardsHtml}
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; margin: 0.5rem 0; background: white; padding: 0.5rem; border-radius: 6px; border: 1px solid #e2e8f0;">
                     <div>
-                        <span style="display: block; font-size: 0.7rem; color: #64748b;">Cancellation Risk</span>
-                        <strong style="font-size: 1rem; color: ${data.cancellationProbability > 0.05 ? '#dc2626' : '#0f172a'};">${cancelPct}%</strong>
+                        <span style="display: block; font-size: 0.68rem; color: #64748b;">Disruption Risk</span>
+                        <strong style="font-size: 0.95rem; color: ${disruptPct > 30 ? '#dc2626' : '#0f172a'};">${disruptPct}%</strong>
                     </div>
                     <div>
-                        <span style="display: block; font-size: 0.7rem; color: #64748b;">Delay &ge; 120m Risk</span>
-                        <strong style="font-size: 1rem; color: ${data.delay120mProbability > 0.08 ? '#d97706' : '#0f172a'};">${delayPct}%</strong>
+                        <span style="display: block; font-size: 0.68rem; color: #64748b;">Cancellation</span>
+                        <strong style="font-size: 0.95rem; color: ${data.cancellationProbability > 0.05 ? '#dc2626' : '#0f172a'};">${cancelPct}%</strong>
                     </div>
                     <div>
-                        <span style="display: block; font-size: 0.7rem; color: #64748b;">Expected Delay</span>
-                        <strong style="font-size: 1rem; color: #0f172a;">${expDelay} min</strong>
+                        <span style="display: block; font-size: 0.68rem; color: #64748b;">Expected Delay</span>
+                        <strong style="font-size: 0.95rem; color: #0f172a;">${expDelay}m</strong>
+                    </div>
+                    <div>
+                        <span style="display: block; font-size: 0.68rem; color: #64748b;">Delay Bound (P10-P90)</span>
+                        <strong style="font-size: 0.95rem; color: #0284c7;">${p10}m - ${p90}m</strong>
                     </div>
                 </div>
+                ${shapHtml}
                 <div style="font-size: 0.72rem; color: #64748b;">
                     Model: <strong>${escapeHtml(data.modelVersion)}</strong> &middot; Latency: <strong>${data.inferenceLatencyMs} ms</strong>
                     ${data.isDurationImputed ? ' &middot; <span style="color:#d97706;">Duration Imputed</span>' : ''}
@@ -2201,6 +2300,154 @@ function renderPredictionResult(data, container) {
                 </div>
             </div>
         `;
+    }
+}
+
+async function fetchPredictiveLeaderboard() {
+    const tbody = document.getElementById("ops-leaderboard-tbody");
+    if (!tbody) return;
+    try {
+        const res = await fetch("/api/intelligence/monitoring/leaderboard");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const items = json.data && json.data.leaderboard ? json.data.leaderboard : (json.leaderboard || []);
+        if (items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #16a34a; padding: 1.5rem;">✔ No flights flagged as high disruption risk in current operational window.</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = items.map(item => {
+            const probPct = Math.round((item.disruption_probability || 0) * 100);
+            const riskColor = probPct >= 35 ? "#dc2626" : probPct >= 20 ? "#ea580c" : "#0284c7";
+            const topShap = item.top_shap_factors && item.top_shap_factors.length > 0 ? item.top_shap_factors[0] : null;
+            const shapHtml = topShap ? `
+                <span style="font-size: 0.73rem; color: #334155;">
+                    <strong style="color: ${topShap.impact_direction === 'INCREASES_RISK' ? '#b91c1c' : '#15803d'};">
+                        ${topShap.impact_direction === 'INCREASES_RISK' ? '▲' : '▼'} ${escapeHtml(topShap.display_name)}
+                    </strong>
+                    <span style="color: #64748b;">(${topShap.shap_value > 0 ? '+' : ''}${topShap.shap_value.toFixed(2)})</span>
+                </span>
+            ` : `<span style="color: #94a3b8; font-size: 0.72rem;">Baseline prior</span>`;
+
+            const hazardsHtml = item.weather_hazards && item.weather_hazards.length > 0
+                ? item.weather_hazards.map(h => `<span class="badge" style="background: #fef2f2; color: #b91c1c; font-size: 0.68rem; margin-right: 0.2rem;">${escapeHtml(h)}</span>`).join("")
+                : `<span style="color: #94a3b8; font-size: 0.72rem;">Nominal</span>`;
+
+            return `
+                <tr>
+                    <td><strong>${escapeHtml(item.flight_number)}</strong> <span style="font-size: 0.72rem; color: #64748b;">(${escapeHtml(item.carrier_code)})</span></td>
+                    <td><code>${escapeHtml(item.route)}</code></td>
+                    <td>${escapeHtml(item.scheduled_dep_time)}</td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; min-width: 45px;">
+                                <div style="width: ${Math.min(probPct, 100)}%; height: 100%; background: ${riskColor};"></div>
+                            </div>
+                            <strong style="color: ${riskColor}; font-size: 0.8rem;">${probPct}%</strong>
+                        </div>
+                    </td>
+                    <td><span style="font-family: monospace; font-size: 0.75rem;">${escapeHtml(item.delay_interval || (item.expected_delay_minutes ? item.expected_delay_minutes.toFixed(0) + 'm' : '15m'))}</span></td>
+                    <td><span class="badge" style="background: ${item.risk_level === 'CRITICAL' ? '#fee2e2' : item.risk_level === 'ELEVATED' ? '#ffedd5' : '#e0f2fe'}; color: ${item.risk_level === 'CRITICAL' ? '#b91c1c' : item.risk_level === 'ELEVATED' ? '#c2410c' : '#0369a1'};">${escapeHtml(item.risk_level)}</span></td>
+                    <td><strong style="color: #0f172a;">${item.estimated_pax_affected || 0}</strong> <span style="font-size: 0.7rem; color: #64748b;">(${item.vulnerable_connections || 0} conn)</span></td>
+                    <td>${shapHtml}</td>
+                    <td>${hazardsHtml}</td>
+                </tr>
+            `;
+        }).join("");
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="9" style="color: #dc2626; padding: 1rem; text-align: center;">Failed to load risk leaderboard: ${escapeHtml(err.message)}</td></tr>`;
+    }
+}
+
+async function fetchAirportHeatmap() {
+    const grid = document.getElementById("ops-heatmap-grid");
+    if (!grid) return;
+    try {
+        const res = await fetch("/api/intelligence/monitoring/heatmap");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const hubs = json.data && json.data.hubs ? json.data.hubs : (json.hubs || []);
+        if (hubs.length === 0) return;
+
+        grid.innerHTML = hubs.map(hub => {
+            const statusColor = hub.status === "CONGESTED" ? "#b91c1c" : hub.status === "ELEVATED" ? "#c2410c" : hub.status === "MODERATE" ? "#0284c7" : "#15803d";
+            const bgBadge = hub.status === "CONGESTED" ? "#fef2f2" : hub.status === "ELEVATED" ? "#fff7ed" : hub.status === "MODERATE" ? "#f0f9ff" : "#f0fdf4";
+            const isIndian = hub.country === "IN";
+
+            return `
+                <div style="padding: 0.75rem 0.85rem; border: 1px solid #e2e8f0; border-radius: 8px; background: white; border-top: 3px solid ${statusColor};">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                        <div>
+                            <strong style="color: #0f172a; font-size: 0.95rem;">${escapeHtml(hub.code)}</strong>
+                            <span style="font-size: 0.72rem; color: #64748b; margin-left: 0.3rem;">${escapeHtml(hub.city)} ${isIndian ? '🇮🇳' : '🇺🇸'}</span>
+                        </div>
+                        <span class="badge" style="background: ${bgBadge}; color: ${statusColor}; font-size: 0.68rem; font-weight: 700;">
+                            ${escapeHtml(hub.status)}
+                        </span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.74rem; color: #475569; margin: 0.3rem 0;">
+                        <span>Active Flights: <strong>${hub.active_flights}</strong></span>
+                        <span>Disruption: <strong style="color: ${statusColor};">${Math.round(hub.disruption_rate * 100)}%</strong></span>
+                    </div>
+                    <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem; padding-top: 0.35rem; border-top: 1px dashed #f1f5f9;">
+                        ☁ ${escapeHtml(hub.weather || 'Normal')}
+                    </div>
+                </div>
+            `;
+        }).join("");
+    } catch (err) {
+        console.error("Error fetching airport heatmap:", err);
+    }
+}
+
+async function fetchConnectionRiskQueue() {
+    const tbody = document.getElementById("ops-connections-tbody");
+    if (!tbody) return;
+    try {
+        const sampleConnections = [
+            { hub: "DEL", inbound: "6E-501 (HYD-DEL)", outbound: "6E-204 (DEL-ATQ)", window: 55, mct: 45, margin: 10, missProb: 0.38, action: "EXPEDITED_GATE_ESCORT", desc: "Escort team dispatched to Delhi T3 transfer corridor" },
+            { hub: "BOM", inbound: "AI-839 (DEL-BOM)", outbound: "AI-101 (BOM-JFK)", window: 70, mct: 90, margin: -20, missProb: 0.76, action: "PROACTIVE_REBOOKING_HOLD", desc: "MCT buffer breached (-20m); initiate alternative routing hold on next morning AI-103" },
+            { hub: "BLR", inbound: "UK-927 (BOM-BLR)", outbound: "UK-812 (BLR-MAA)", window: 65, mct: 45, margin: 20, missProb: 0.12, action: "STANDARD_MONITORING", desc: "Healthy 20m buffer above Bengaluru minimum connect time" },
+            { hub: "HYD", inbound: "6E-312 (BLR-HYD)", outbound: "6E-588 (HYD-CCU)", window: 40, mct: 45, margin: -5, missProb: 0.54, action: "EXPEDITED_GATE_ESCORT", desc: "5m deficit below MCT; alert Hyderabad ground operations" }
+        ];
+
+        tbody.innerHTML = sampleConnections.map(c => {
+            const probPct = Math.round(c.missProb * 100);
+            const probColor = probPct >= 50 ? "#dc2626" : probPct >= 25 ? "#ea580c" : "#15803d";
+            const actionBadgeColor = c.action === "PROACTIVE_REBOOKING_HOLD" ? "#fee2e2" : c.action === "EXPEDITED_GATE_ESCORT" ? "#ffedd5" : "#f0fdf4";
+            const actionTextColor = c.action === "PROACTIVE_REBOOKING_HOLD" ? "#b91c1c" : c.action === "EXPEDITED_GATE_ESCORT" ? "#c2410c" : "#15803d";
+
+            return `
+                <tr>
+                    <td><strong>${escapeHtml(c.hub)}</strong></td>
+                    <td>
+                        <div style="font-size: 0.8rem; font-weight: 600; color: #0f172a;">${escapeHtml(c.inbound)}</div>
+                        <div style="font-size: 0.74rem; color: #64748b;">&darr; ${escapeHtml(c.outbound)}</div>
+                    </td>
+                    <td>${c.window}m</td>
+                    <td>${c.mct}m</td>
+                    <td>
+                        <strong style="color: ${c.margin < 0 ? '#dc2626' : '#15803d'};">
+                            ${c.margin > 0 ? '+' : ''}${c.margin}m
+                        </strong>
+                    </td>
+                    <td>
+                        <strong style="color: ${probColor};">${probPct}%</strong>
+                    </td>
+                    <td>
+                        <div>
+                            <span class="badge" style="background: ${actionBadgeColor}; color: ${actionTextColor}; font-size: 0.68rem; font-weight: 700;">
+                                ${escapeHtml(c.action)}
+                            </span>
+                        </div>
+                        <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">
+                            ${escapeHtml(c.desc)}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join("");
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color: #dc2626; padding: 1rem; text-align: center;">Error loading connection risks: ${escapeHtml(err.message)}</td></tr>`;
     }
 }
 

@@ -19,9 +19,9 @@ public class RebookService {
     }
 
     public RebookResultDto executePlaywrightRebook(String caseId, String optionId, String flight) {
-        String passenger = "Ananya Sharma";
+        String passenger = "Verified Passenger";
         if (caseRepository != null) {
-            passenger = caseRepository.findById(caseId).map(RescueCase::getPassengerName).orElse("Ananya Sharma");
+            passenger = caseRepository.findById(caseId).map(RescueCase::getPassengerName).orElse("Verified Passenger");
         }
         return executePlaywrightRebook(caseId, optionId, flight, passenger);
     }

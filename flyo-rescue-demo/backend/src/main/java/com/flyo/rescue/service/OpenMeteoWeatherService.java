@@ -184,14 +184,14 @@ public class OpenMeteoWeatherService {
                 name,
                 lat,
                 lon,
-                24.0,
-                55,
-                6000.0,
-                1,
-                "Fair Visibility / Operational Baseline",
-                12.0,
+                0.0,
+                0,
+                0.0,
+                -1,
+                "WEATHER_TELEMETRY_UNAVAILABLE",
+                0.0,
                 false,
-                "Local Aviation Weather Baseline"
+                "UNAVAILABLE"
         );
     }
 }

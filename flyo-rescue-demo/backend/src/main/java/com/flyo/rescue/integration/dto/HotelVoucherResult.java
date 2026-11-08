@@ -29,6 +29,13 @@ public class HotelVoucherResult {
         return res;
     }
 
+    public static HotelVoucherResult failed(String errorCode, String errorMessage) {
+        HotelVoucherResult res = new HotelVoucherResult();
+        res.reserved = false;
+        res.errorMessage = errorCode + ": " + errorMessage;
+        return res;
+    }
+
     public boolean isReserved() { return reserved; }
     public void setReserved(boolean reserved) { this.reserved = reserved; }
     public String getVoucherCode() { return voucherCode; }

@@ -84,7 +84,8 @@ class FlightPredictionResponse(BaseModel):
     is_duration_imputed: bool = False
     is_distance_imputed: bool = False
     disclaimer: str = (
-        "Statistical advisory only. Human supervisor authorization is strictly required "
+        "Statistical advisory only. Extreme delay >=120m is a flight delay classification target, "
+        "never a missed connection probability. Human supervisor authorization is strictly required "
         "before booking modifications or passenger rebooking execution."
     )
     model_version: str

@@ -56,14 +56,14 @@ public class AviationstackStatusAdapter implements FlightStatusProvider {
         } else {
             return new FlightStatusResponse(
                     flightNumber,
-                    "ON_TIME",
+                    "STATUS_UNAVAILABLE",
                     0,
                     Instant.now(),
                     Instant.now(),
-                    "HYD",
-                    "DEL",
+                    "---",
+                    "---",
                     "aviationstack",
-                    "Flight operating on scheduled timetable"
+                    "No real-time radar telemetry received from provider for " + flightNumber
             );
         }
     }

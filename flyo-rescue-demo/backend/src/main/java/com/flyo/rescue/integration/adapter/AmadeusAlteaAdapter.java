@@ -1,11 +1,15 @@
 package com.flyo.rescue.integration.adapter;
 
+import com.flyo.rescue.exception.ProviderNotConfiguredException;
 import com.flyo.rescue.integration.*;
 import com.flyo.rescue.integration.amadeus.AmadeusGdsSandboxClient;
+import com.flyo.rescue.integration.amadeus.AmadeusOrderDetailsResponse;
 import com.flyo.rescue.integration.amadeus.AmadeusTicketVerificationResult;
 import com.flyo.rescue.integration.dto.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -21,9 +25,12 @@ public class AmadeusAlteaAdapter implements BookingRetrievalProvider, PnrLookupP
     private static final Logger log = LoggerFactory.getLogger(AmadeusAlteaAdapter.class);
 
     private final AmadeusGdsSandboxClient amadeusClient;
+    private final Environment environment;
 
-    public AmadeusAlteaAdapter(AmadeusGdsSandboxClient amadeusClient) {
+    public AmadeusAlteaAdapter(@Autowired(required = false) AmadeusGdsSandboxClient amadeusClient,
+                               Environment environment) {
         this.amadeusClient = amadeusClient;
+        this.environment = environment;
     }
 
     @Override
@@ -53,13 +60,44 @@ public class AmadeusAlteaAdapter implements BookingRetrievalProvider, PnrLookupP
                 segment.getPassengerName(),
                 List.of(segment),
                 "Amadeus 1A",
-                "CONFIRMED"
+                segment.getStatus()
         );
     }
 
     @Override
     public PnrRecord lookupPnr(String pnr, String passengerSurname) {
         log.info("[AmadeusAdapter] Looking up PNR {} for surname {}", pnr, passengerSurname);
+
+        if (amadeusClient != null && amadeusClient.isConfigured()) {
+            try {
+                AmadeusOrderDetailsResponse details = amadeusClient.retrieveFlightOrder(pnr);
+                if (details != null && details.success()) {
+                    return new PnrRecord(
+                            pnr,
+                            details.passengerName() != null ? details.passengerName() : passengerSurname,
+                            "",
+                            "",
+                            details.flightNumber() != null ? details.flightNumber() : "GDS-ORDER",
+                            details.origin() + " → " + details.destination(),
+                            "None",
+                            details.ticketNumber() != null ? details.ticketNumber() : "TKT-PENDING",
+                            "OPEN",
+                            details.orderStatus() != null ? details.orderStatus() : "CONFIRMED"
+                    );
+                }
+            } catch (Exception ex) {
+                log.error("[AmadeusAdapter] Error querying Amadeus order details: {}", ex.getMessage());
+            }
+        }
+
+        if (environment != null && environment.matchesProfiles("prod")) {
+            throw new ProviderNotConfiguredException(
+                    "Amadeus Altéa PSS",
+                    "BLOCKED BY EXTERNAL ACCESS: Cannot look up PNR without active Amadeus credentials."
+            );
+        }
+
+        // Test environment simulator fallback
         return new PnrRecord(
                 pnr,
                 passengerSurname != null ? "Customer / " + passengerSurname : "Verified Passenger",
@@ -90,8 +128,13 @@ public class AmadeusAlteaAdapter implements BookingRetrievalProvider, PnrLookupP
             );
         }
 
-        // When external credentials are not present in the environment:
-        // Fail-closed if ticket format is invalid, otherwise return structured contract result with explicit mock remark
+        if (environment != null && environment.matchesProfiles("prod")) {
+            throw new ProviderNotConfiguredException(
+                    "Amadeus Altéa PSS",
+                    "BLOCKED BY EXTERNAL ACCESS: Cannot verify ticket without active Amadeus credentials."
+            );
+        }
+
         boolean isValid = ticketNumber != null && !ticketNumber.isBlank()
                 && !ticketNumber.contains("VOID") && !ticketNumber.contains("FAIL");
 

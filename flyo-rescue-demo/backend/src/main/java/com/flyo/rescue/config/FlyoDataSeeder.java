@@ -5,12 +5,20 @@ import com.flyo.rescue.model.OperatorAccount;
 import com.flyo.rescue.repository.BookingRepository;
 import com.flyo.rescue.repository.OperatorAccountRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Development & Test Synthetic Fixture Seeder.
+ * Strictly disabled in production profiles (!prod) and gated by flyo.seeding.enabled.
+ */
 @Component
+@Profile("!prod")
+@ConditionalOnProperty(name = "flyo.seeding.enabled", havingValue = "true", matchIfMissing = true)
 public class FlyoDataSeeder implements CommandLineRunner {
 
     private final BookingRepository bookingRepository;

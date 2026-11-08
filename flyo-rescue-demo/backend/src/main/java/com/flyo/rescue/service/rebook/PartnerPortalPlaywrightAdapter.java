@@ -5,7 +5,7 @@ import com.flyo.rescue.controller.MockAirlineController;
 import com.flyo.rescue.dto.RebookResultDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -19,12 +19,11 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Resilient Playwright-based Airline Partner Operations Portal Adapter.
- *
- * Executes automated rebooking against the partner airline portal
- * via headless browser with retry policies, screenshot proofs, and DOM extraction.
+ * Development & testing adapter for local headless browser automation.
+ * Strictly disabled in production profiles (!prod).
  */
 @Component
-@Primary
+@Profile("!prod")
 public class PartnerPortalPlaywrightAdapter implements FlightBookingProvider {
 
     private static final Logger log = LoggerFactory.getLogger(PartnerPortalPlaywrightAdapter.class);

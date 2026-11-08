@@ -10,11 +10,13 @@ import com.flyo.rescue.model.PaymentTransaction;
 import com.flyo.rescue.model.VirtualCard;
 import com.flyo.rescue.service.PaymentSettlementService;
 import com.flyo.rescue.service.payment.SandboxPaymentAdapter;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
+@Profile("!prod")
 public class FlyoSandboxPaymentProviderAdapter implements PaymentAuthorizationProvider, PaymentSettlementProvider {
 
     private final SandboxPaymentAdapter sandboxPaymentAdapter;
