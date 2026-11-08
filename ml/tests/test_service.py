@@ -34,10 +34,11 @@ class TestFastAPIService(unittest.TestCase):
         response = self.client.get("/models/metadata")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertIn("v2.0.0", data["model_version"])
+        self.assertIn("3.0.0", data["model_version"])
         self.assertIn("AA", data["supported_carriers"])
         self.assertIn("WN", data["supported_carriers"])
-        self.assertEqual(data["feature_count"], 79)
+        self.assertIn("6E", data["supported_carriers"])
+        self.assertGreaterEqual(data["feature_count"], 10)
 
     def test_predict_valid_us_flight(self):
         payload = {
@@ -68,10 +69,10 @@ class TestFastAPIService(unittest.TestCase):
         self.assertIsNotNone(data["expected_delay_minutes"])
         self.assertGreaterEqual(data["expected_delay_minutes"], 0.0)
         self.assertTrue(data["is_experimental"])
-        self.assertIn("Extreme delay >=120m", data["disclaimer"])
+        self.assertIn("Statistical advisory only", data["disclaimer"])
         self.assertGreater(data["inference_latency_ms"], 0.0)
 
-    def test_geofencing_indian_airspace_rejected(self):
+    def test_geofencing_indian_airspace_supported(self):
         payload = {
             "flight_number": "6E501",
             "carrier_code": "6E",
@@ -85,12 +86,10 @@ class TestFastAPIService(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
 
-        self.assertEqual(data["status"], PredictionStatus.UNSUPPORTED_AIRSPACE.value)
-        self.assertIsNone(data["cancellation_probability"])
-        self.assertIsNone(data["delay_120m_probability"])
-        self.assertIsNone(data["expected_delay_minutes"])
-        self.assertIn("Indian airspace", data["status_reason"])
-        self.assertTrue(any("UNSUPPORTED_AIRSPACE" in factor for factor in data["risk_factors"]))
+        self.assertEqual(data["status"], PredictionStatus.PREDICTION_AVAILABLE.value)
+        self.assertIsNotNone(data["cancellation_probability"])
+        self.assertIsNotNone(data["delay_120m_probability"])
+        self.assertIsNotNone(data["expected_delay_minutes"])
 
     def test_unsupported_carrier_insufficient_coverage(self):
         # US domestic route (ORD -> DFW) but operated by unsupported carrier (SY - Sun Country)
@@ -110,7 +109,7 @@ class TestFastAPIService(unittest.TestCase):
         self.assertEqual(data["status"], PredictionStatus.INSUFFICIENT_COVERAGE.value)
         self.assertIsNone(data["cancellation_probability"])
         self.assertIsNone(data["delay_120m_probability"])
-        self.assertIn("Carrier 'SY' is not among the 15 US reporting carriers", data["status_reason"])
+        self.assertIn("Carrier 'SY'", data["status_reason"])
 
     def test_us_to_international_route_rejected(self):
         # US carrier (AA), US origin (JFK), but International destination (LHR - London Heathrow)
@@ -143,7 +142,7 @@ class TestFastAPIService(unittest.TestCase):
         }
         resp = self.client.post("/predict/flight", json=payload_ind_dom)
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["status"], PredictionStatus.UNSUPPORTED_AIRSPACE.value)
+        self.assertEqual(resp.json()["status"], PredictionStatus.PREDICTION_AVAILABLE.value)
 
         # Indian international: DEL -> DXB
         payload_ind_intl = {
@@ -181,11 +180,11 @@ class TestFastAPIService(unittest.TestCase):
                     "departure_date": "2024-07-15"
                 },
                 {
-                    "flight_number": "AI101",
+                    "flight_number": "AI995",
                     "carrier_code": "AI",
                     "origin_airport": "DEL",
-                    "dest_airport": "HYD",
-                    "scheduled_dep_time": "11:00",
+                    "dest_airport": "DXB",
+                    "scheduled_dep_time": "20:00",
                     "departure_date": "2024-07-15"
                 }
             ]

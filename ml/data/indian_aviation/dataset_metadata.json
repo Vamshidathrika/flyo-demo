@@ -1,0 +1,13 @@
+{
+  "dataset_version": "3.0.0-enterprise",
+  "generated_at_utc": "2026-11-08T05:26:20.995627+00:00",
+  "total_flights": 30672,
+  "date_range": "2024-01-01 to 2024-07-31",
+  "corridors_covered": 12,
+  "carriers_covered": 5,
+  "cancellation_rate": 1.99,
+  "delay_15m_rate": 26.78,
+  "delay_120m_rate": 1.4,
+  "mean_arrival_delay_completed": 13.56,
+  "provenance_disclaimer": "Synthesized from DGCA published schedules, monthly on-time reports, and airport weather patterns. Explicitly separated from BTS US raw data."
+}

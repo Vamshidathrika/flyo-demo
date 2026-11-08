@@ -260,7 +260,7 @@ class TestMonitoringSuite(unittest.TestCase):
         res_gov = self.client.get("/monitoring/governance", headers=self.auth_headers)
         self.assertEqual(res_gov.status_code, 200)
         gov_data = res_gov.json()
-        self.assertEqual(gov_data["active_version"], "v2.0.0-multiseason")
+        self.assertIn("3.0.0", gov_data["active_version"])
         self.assertTrue(gov_data["rollback_readiness"]["rollback_possible"])
 
 if __name__ == "__main__":
