@@ -17,7 +17,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/cases")
@@ -72,6 +74,31 @@ public class CaseController {
     @GetMapping
     public ResponseEntity<List<RescueCase>> getAllCases() {
         return ResponseEntity.ok(caseService.getAllCases());
+    }
+
+    @GetMapping("/operations-summary")
+    public ResponseEntity<Map<String, Object>> getOperationsSummary() {
+        List<RescueCase> allCases = caseService.getAllCases();
+        long activeCount = allCases.stream().filter(c ->
+                List.of("NEW", "ANALYZING", "OPTIONS_READY", "APPROVED", "REBOOKING", "VERIFYING_BOOKING", "VERIFYING_TICKET")
+                        .contains(c.getState())).count();
+        long manualCount = allCases.stream().filter(c -> "MANUAL_INTERVENTION_REQUIRED".equals(c.getState())).count();
+        long failedCount = allCases.stream().filter(c -> "FAILED_ESCALATED".equals(c.getState())).count();
+        long doneCount = allCases.stream().filter(c -> "DONE".equals(c.getState())).count();
+
+        List<RescueCase> attentionRequired = allCases.stream()
+                .filter(c -> "MANUAL_INTERVENTION_REQUIRED".equals(c.getState()) || "FAILED_ESCALATED".equals(c.getState()))
+                .toList();
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("tenantId", com.flyo.rescue.security.TenantContext.getTenantId());
+        summary.put("totalCases", allCases.size());
+        summary.put("activeDisruptionsCount", activeCount);
+        summary.put("manualInterventionCount", manualCount);
+        summary.put("failedEscalationsCount", failedCount);
+        summary.put("resolvedDoneCount", doneCount);
+        summary.put("attentionRequiredCases", attentionRequired);
+        return ResponseEntity.ok(summary);
     }
 
     @GetMapping("/{id}")

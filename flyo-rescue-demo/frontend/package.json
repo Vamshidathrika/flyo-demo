@@ -1,0 +1,19 @@
+{
+  "name": "flyo-rescue-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Flyo Rescue Enterprise Single Page Operator Dashboard",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test.mjs",
+    "lint": "node lint.mjs"
+  },
+  "keywords": [
+    "flyo",
+    "frontend",
+    "aviation",
+    "operator-dashboard"
+  ],
+  "author": "Flyo Aviation Systems",
+  "license": "UNLICENSED"
+}

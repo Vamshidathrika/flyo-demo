@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  flyo-db:
+    image: postgres:16-alpine
+    container_name: flyo-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-flyodb}
+      POSTGRES_USER: ${POSTGRES_USER:-flyo_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password must be set}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - flyo_prod_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+    networks:
+      - flyo-internal
+
+  flyo-redis:
+    image: redis:7-alpine
+    container_name: flyo-redis-prod
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:?Redis password must be set} --save 60 1 --loglevel warning
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - flyo_prod_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    networks:
+      - flyo-internal
+
+  flyo-ml:
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+    container_name: flyo-ml-service
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PORT: "5000"
+    ports:
+      - "127.0.0.1:5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+    networks:
+      - flyo-internal
+
+  flyo-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flyo-rescue-prod
+    restart: unless-stopped
+    depends_on:
+      flyo-db:
+        condition: service_healthy
+      flyo-redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://flyo-db:5432/${POSTGRES_DB:-flyodb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-flyo_admin}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?PostgreSQL password required}
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      SPRING_DATA_REDIS_HOST: flyo-redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?Redis password required}
+      FLYO_SECURITY_JWT_SECRET: ${FLYO_SECURITY_JWT_SECRET:?JWT secret required}
+      AIRLINE_BOOKING_PROVIDER: ${AIRLINE_BOOKING_PROVIDER:-SANDBOX}
+      AMADEUS_CLIENT_ID: ${AMADEUS_CLIENT_ID:-}
+      AMADEUS_CLIENT_SECRET: ${AMADEUS_CLIENT_SECRET:-}
+      SALESFORCE_CLIENT_ID: ${SALESFORCE_CLIENT_ID:-}
+      SALESFORCE_CLIENT_SECRET: ${SALESFORCE_CLIENT_SECRET:-}
+      SALESFORCE_INSTANCE_URL: ${SALESFORCE_INSTANCE_URL:-}
+      WHATSAPP_META_ENABLED: ${WHATSAPP_META_ENABLED:-true}
+      WHATSAPP_META_ACCESS_TOKEN: ${WHATSAPP_META_ACCESS_TOKEN:-}
+      WHATSAPP_META_APP_SECRET: ${WHATSAPP_META_APP_SECRET:-}
+      WHATSAPP_META_PHONE_NUMBER_ID: ${WHATSAPP_META_PHONE_NUMBER_ID:-}
+      SERVER_PORT: 8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+    networks:
+      - flyo-internal
+
+volumes:
+  flyo_prod_pgdata:
+    name: flyo_prod_pgdata
+  flyo_prod_redisdata:
+    name: flyo_prod_redisdata
+
+networks:
+  flyo-internal:
+    name: flyo-internal
+    driver: bridge

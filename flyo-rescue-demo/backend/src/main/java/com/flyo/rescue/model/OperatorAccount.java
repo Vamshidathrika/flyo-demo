@@ -4,6 +4,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 @Entity
 @Table(name = "operator_accounts")
 public class OperatorAccount {
@@ -18,6 +23,9 @@ public class OperatorAccount {
     private boolean enabled;
     private String phoneNumber;
 
+    private String tenantId = "tenant_default";
+    private String authorizedTenants = "tenant_default";
+
     public OperatorAccount() {
     }
 
@@ -29,6 +37,21 @@ public class OperatorAccount {
         this.role = role;
         this.enabled = enabled;
         this.phoneNumber = phoneNumber;
+        this.tenantId = "tenant_default";
+        this.authorizedTenants = "tenant_default";
+    }
+
+    public OperatorAccount(String id, String username, String passwordHash, String fullName, String role, boolean enabled, String phoneNumber,
+                           String tenantId, String authorizedTenants) {
+        this.id = id;
+        this.username = username;
+        this.passwordHash = passwordHash;
+        this.fullName = fullName;
+        this.role = role;
+        this.enabled = enabled;
+        this.phoneNumber = phoneNumber;
+        this.tenantId = (tenantId != null && !tenantId.isBlank()) ? tenantId : "tenant_default";
+        this.authorizedTenants = (authorizedTenants != null && !authorizedTenants.isBlank()) ? authorizedTenants : this.tenantId;
     }
 
     public String getId() {
@@ -85,5 +108,38 @@ public class OperatorAccount {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public String getTenantId() {
+        return tenantId != null ? tenantId : "tenant_default";
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public String getAuthorizedTenants() {
+        return authorizedTenants != null ? authorizedTenants : getTenantId();
+    }
+
+    public void setAuthorizedTenants(String authorizedTenants) {
+        this.authorizedTenants = authorizedTenants;
+    }
+
+    public Set<String> getAuthorizedTenantsSet() {
+        if (authorizedTenants == null || authorizedTenants.isBlank()) {
+            return Set.of(getTenantId());
+        }
+        return Arrays.stream(authorizedTenants.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toSet());
+    }
+
+    public boolean isAuthorizedForTenant(String targetTenant) {
+        if (targetTenant == null || targetTenant.isBlank()) return false;
+        Set<String> set = getAuthorizedTenantsSet();
+        if (set.contains("*")) return true;
+        return set.contains(targetTenant) || targetTenant.equals(getTenantId());
     }
 }

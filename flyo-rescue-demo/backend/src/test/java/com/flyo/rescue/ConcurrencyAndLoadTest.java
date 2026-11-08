@@ -195,7 +195,7 @@ public class ConcurrencyAndLoadTest {
         assertTrue(successfulApprovals >= 1, "At least one approval call must succeed");
 
         RescueCase finalCase = rescueCaseRepository.findById(c.getId()).orElseThrow();
-        assertEquals("AWAITING_APPROVAL", finalCase.getState());
+        assertEquals("APPROVED", finalCase.getState());
         assertTrue(finalCase.getApprovedOptionId().endsWith("O2"), "Approved option ID must be O2");
 
         // Ensure Virtual Card was issued cleanly without duplicates

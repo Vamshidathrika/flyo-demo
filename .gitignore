@@ -10,3 +10,22 @@ node_modules/
 **/.DS_Store
 test-results/
 **/test-results/
+
+# Python & Environments
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+*.sqlite3
+**/*.sqlite3
+
+*.db
+**/*.db
+ml/data/raw/
+ml/data/processed/
+ml/data/weather/

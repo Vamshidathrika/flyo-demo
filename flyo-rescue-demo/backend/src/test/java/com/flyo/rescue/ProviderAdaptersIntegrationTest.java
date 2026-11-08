@@ -58,7 +58,9 @@ public class ProviderAdaptersIntegrationTest {
         assertEquals("ISSUED", card.getStatus());
         assertTrue(card.getMaskedCardNumber().startsWith("•••• •••• •••• "));
         assertEquals("12/28", card.getExpiry());
-        assertNotNull(card.getCvv());
+        assertNotNull(card.getCardTokenId());
+        assertNotNull(card.getLastFour());
+        assertEquals(4, card.getLastFour().length());
 
         PaymentTransaction txn = sandboxPaymentAdapter.recordSettlement("CASE-ADAPTER-1", card.getId(), 4200, "StarSky Airlines");
         assertNotNull(txn);

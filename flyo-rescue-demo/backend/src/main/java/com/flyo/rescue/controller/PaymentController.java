@@ -1,8 +1,11 @@
 package com.flyo.rescue.controller;
 
 import com.flyo.rescue.model.PaymentTransaction;
+import com.flyo.rescue.model.RescueCase;
 import com.flyo.rescue.model.VirtualCard;
+import com.flyo.rescue.service.CaseService;
 import com.flyo.rescue.service.PaymentSettlementService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,13 +20,21 @@ import java.util.Optional;
 public class PaymentController {
 
     private final PaymentSettlementService paymentService;
+    private final CaseService caseService;
 
-    public PaymentController(PaymentSettlementService paymentService) {
+    public PaymentController(PaymentSettlementService paymentService, CaseService caseService) {
         this.paymentService = paymentService;
+        this.caseService = caseService;
     }
 
     @GetMapping("/case/{caseId}")
     public ResponseEntity<Map<String, Object>> getPaymentDetailsForCase(@PathVariable String caseId) {
+        // Enforce tenant boundary: Case must exist and belong to caller's tenant
+        Optional<RescueCase> caseOpt = caseService.getCaseById(caseId);
+        if (caseOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
         Optional<VirtualCard> cardOpt = paymentService.getActiveCardForCase(caseId);
         List<PaymentTransaction> ledger = paymentService.getLedgerForCase(caseId);
 

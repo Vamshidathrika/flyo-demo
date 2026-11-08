@@ -62,4 +62,15 @@ public class StripeIssuingPaymentAdapter implements PaymentGatewayAdapter {
         }
         throw new UnsupportedOperationException("Stripe Issuing live settlement pending activation.");
     }
+
+    @Override
+    public boolean voidAuthorization(String caseId, String virtualCardId) {
+        if (!isConfigured()) {
+            throw new ProviderNotConfiguredException(
+                    getProviderName(),
+                    "BLOCKED BY EXTERNAL ACCESS: Stripe Issuing API credentials not provided."
+            );
+        }
+        throw new UnsupportedOperationException("Stripe Issuing live void pending activation.");
+    }
 }

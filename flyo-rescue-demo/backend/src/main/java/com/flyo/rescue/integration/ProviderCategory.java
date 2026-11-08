@@ -1,0 +1,14 @@
+package com.flyo.rescue.integration;
+
+public enum ProviderCategory {
+    FLIGHT_STATUS,
+    BOOKING_RETRIEVAL,
+    PNR_LOOKUP,
+    TICKET_VERIFICATION,
+    FLIGHT_REBOOKING,
+    PAYMENT_AUTHORIZATION,
+    PAYMENT_SETTLEMENT,
+    HOTEL_ACCOMMODATION,
+    MESSAGING,
+    CRM_SYNCHRONIZATION
+}

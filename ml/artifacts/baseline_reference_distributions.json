@@ -1,0 +1,94 @@
+{
+  "model_version": "v2.0.0-multiseason",
+  "generated_at_utc": "2026-11-05T16:45:00Z",
+  "sample_size": 50000,
+  "reference_partition": "July 2024 Held-Out Summer Convective Test Set",
+  "probability_bins": {
+    "cancellation": {
+      "bins": [0.0, 0.01, 0.02, 0.04, 0.08, 0.15, 1.0],
+      "expected_frequencies": [0.582, 0.241, 0.115, 0.046, 0.014, 0.002]
+    },
+    "delay120": {
+      "bins": [0.0, 0.02, 0.05, 0.10, 0.20, 1.0],
+      "expected_frequencies": [0.420, 0.335, 0.165, 0.068, 0.012]
+    },
+    "continuous_delay_minutes": {
+      "bins": [0.0, 10.0, 20.0, 40.0, 60.0, 120.0, 1000.0],
+      "expected_frequencies": [0.380, 0.260, 0.190, 0.100, 0.055, 0.015]
+    }
+  },
+  "numeric_feature_percentiles": {
+    "scheduled_elapsed_minutes": {
+      "p10": 70.0,
+      "p25": 92.0,
+      "p50": 133.0,
+      "p75": 195.0,
+      "p90": 290.0,
+      "mean": 152.4,
+      "std": 78.5
+    },
+    "distance_miles": {
+      "p10": 240.0,
+      "p25": 420.0,
+      "p50": 765.0,
+      "p75": 1240.0,
+      "p90": 2150.0,
+      "mean": 925.6,
+      "std": 620.4
+    }
+  },
+  "carrier_frequencies": {
+    "WN": 0.202,
+    "DL": 0.146,
+    "AA": 0.138,
+    "UA": 0.104,
+    "OO": 0.099,
+    "MQ": 0.041,
+    "YX": 0.040,
+    "NK": 0.038,
+    "AS": 0.038,
+    "OH": 0.032,
+    "B6": 0.032,
+    "F9": 0.030,
+    "9E": 0.027,
+    "G4": 0.020,
+    "HA": 0.010,
+    "other": 0.003
+  },
+  "performance_baselines": {
+    "cancellation": {
+      "brier_score": 0.02931,
+      "roc_auc": 0.5279,
+      "pr_auc": 0.03176,
+      "ece": 0.02389
+    },
+    "delay120": {
+      "brier_score": 0.05075,
+      "roc_auc": 0.59497,
+      "pr_auc": 0.06927,
+      "ece": 0.03458
+    },
+    "continuous_delay": {
+      "mae": 34.00,
+      "rmse": 72.98,
+      "median_ae": 20.95
+    }
+  },
+  "drift_thresholds": {
+    "psi": {
+      "normal": 0.10,
+      "warning": 0.25,
+      "critical": 0.25
+    },
+    "ks_pvalue_significance": 0.01,
+    "min_sample_size": 30
+  },
+  "quality_thresholds": {
+    "imputation_rate_warning": 0.10,
+    "imputation_rate_critical": 0.25,
+    "error_rate_warning": 0.05,
+    "error_rate_critical": 0.15,
+    "latency_p95_warning_ms": 100.0,
+    "latency_p95_critical_ms": 250.0
+  }
+}

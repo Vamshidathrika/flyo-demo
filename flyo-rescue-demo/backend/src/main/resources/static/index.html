@@ -55,6 +55,12 @@
                     <button class="platform-tab-btn" id="tab-logs" onclick="switchSectionView('logs')">
                         Audit Logs <span class="tab-badge tab-badge-count" id="tab-logs-count">0</span>
                     </button>
+                    <button class="platform-tab-btn" id="tab-monitoring" onclick="switchSectionView('monitoring')">
+                        ML Observability <span class="tab-badge" id="tab-ml-status-badge" style="background: #0284c7; color: white;">v2</span>
+                    </button>
+                    <button class="platform-tab-btn" id="tab-ops" onclick="switchSectionView('ops')">
+                        Operations Control <span class="tab-badge" id="tab-ops-badge" style="background: #059669; color: white;">Live</span>
+                    </button>
                 </nav>
 
                 <!-- SECTION 1: TRIP MONITOR & BOOKINGS -->
@@ -338,6 +344,12 @@
                                 <span class="pnr-rescue-code" id="rescued-pnr-code">R7X2K9</span>
                                 <span style="background: #16a34a; color: white; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 9999px;">IDEMPOTENT &middot; VERIFIED</span>
                             </div>
+                            <div class="stage4-status-tray" id="stage4-status-tray" style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem; font-size: 0.75rem;">
+                                <span class="badge" id="rescued-ticket-badge" style="background: #0284c7; color: white; display: none;">Ticket: None</span>
+                                <span class="badge" id="rescued-notification-badge" style="background: #059669; color: white; display: none;">WhatsApp: Pending</span>
+                                <span class="badge" id="rescued-crm-badge" style="background: #7c3aed; color: white; display: none;">CRM: Pending</span>
+                                <span class="badge" id="rescued-correlation-badge" style="background: #475569; color: white; display: none;">Trace: None</span>
+                            </div>
                             <div class="screenshot-tray" id="screenshot-tray">
                                 <span style="font-size: 0.8rem; font-weight: 600; color: #166534;">Automated Playwright Audit Trail: 4 Steps Verified (Search &rarr; Select &rarr; Confirm &rarr; Confirmed)</span>
                             </div>
@@ -403,6 +415,21 @@
                                     </div>
                                     <div class="impact-chip chip-amber">
                                         <strong>Hotel Financial Risk:</strong> <span id="case-hotel-risk">Delhi hotel non-refundable</span>
+                                    </div>
+                                </div>
+                                <!-- Multi-Source Telemetry & Evidence Reconciliation Box -->
+                                <div class="evidence-telemetry-box" id="case-evidence-box" style="margin-top: 0.75rem; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 0.85rem 1rem;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <span style="background: #16a34a; color: white; font-size: 0.7rem; font-weight: 800; padding: 0.15rem 0.5rem; border-radius: 4px; text-transform: uppercase;">
+                                                Multi-Source Verified
+                                            </span>
+                                            <strong style="color: #14532d; font-size: 0.85rem;" id="case-evidence-confidence">98% Reconciled Confidence</strong>
+                                        </div>
+                                        <span style="font-size: 0.75rem; color: #166534; font-weight: 600;" id="case-evidence-weather">DEL: Live Weather Telemetry (Open-Meteo)</span>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #15803d; line-height: 1.4;" id="case-evidence-text">
+                                        Radar cancellation corroborated across Open-Meteo airport weather telemetry and operational intelligence.
                                     </div>
                                 </div>
                             </div>
@@ -547,6 +574,356 @@
                         </div>
                         <div class="audit-timeline" id="audit-timeline" style="min-height: 480px; padding: 1.5rem;">
                             <div class="empty-state">No audit events recorded yet.</div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- SECTION 5: ML OBSERVABILITY & PREDICTION QUALITY -->
+                <div class="section-view" id="view-monitoring" style="display: none;">
+                    <!-- Mandatory Safety & Governance Header -->
+                    <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                <span style="background: #15803d; color: white; font-size: 0.72rem; font-weight: 750; padding: 0.2rem 0.55rem; border-radius: 4px; letter-spacing: 0.03em;">
+                                    ML OBSERVABILITY &middot; V2 MULTISEASON
+                                </span>
+                                <strong style="color: #166534; font-size: 0.95rem;">Model Monitoring &amp; Prediction Quality Governance</strong>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <span class="badge" id="ml-circuit-badge" style="background: #dcfce7; color: #166534; font-weight: 700; border: 1px solid #86efac;">
+                                    Circuit: CLOSED (0 Failures)
+                                </span>
+                                <span class="badge" id="ml-version-badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700; border: 1px solid #7dd3fc;">
+                                    v2.0.0-multiseason
+                                </span>
+                                <button class="btn btn-secondary btn-sm" onclick="fetchMonitoringData(true)" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">
+                                    ↻ Refresh Telemetry
+                                </button>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.8rem; color: #14532d; margin: 0.5rem 0 0; line-height: 1.45;">
+                            <strong>Experimental Supplementary Intelligence:</strong> Machine learning risk predictions are non-authoritative advisory signals. Authoritative decisions remain with the deterministic flight evidence reconciliation engine. Autonomous rebooking and autonomous retraining are strictly forbidden. Mandatory human operator approval is enforced.
+                        </p>
+                    </div>
+
+                    <!-- Active Alerts Banner -->
+                    <div id="ml-alerts-container" style="margin-bottom: 1.25rem;">
+                        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 0.8rem; color: #1e40af; font-weight: 600;">System Alert Status: NORMAL &middot; All monitoring thresholds within nominal bounds.</span>
+                        </div>
+                    </div>
+
+                    <!-- Telemetry KPI Cards Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem;">
+                        <!-- Card 1: Prediction Volume -->
+                        <div class="summary-card" style="padding: 1rem;">
+                            <span class="summary-label">Total Predictions Logged</span>
+                            <span class="summary-value" id="ml-total-predictions" style="font-size: 1.4rem;">0</span>
+                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-status-breakdown">
+                                Available: 0 &middot; Geofenced: 0
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Latency -->
+                        <div class="summary-card" style="padding: 1rem;">
+                            <span class="summary-label">Inference Latency (p95)</span>
+                            <span class="summary-value" id="ml-latency-p95" style="font-size: 1.4rem; color: #0284c7;">-- ms</span>
+                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-latency-p50">
+                                Median (p50): -- ms
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Imputation & Quality -->
+                        <div class="summary-card" style="padding: 1rem;">
+                            <span class="summary-label">Feature Imputation Rates</span>
+                            <span class="summary-value" id="ml-imputation-rate" style="font-size: 1.4rem; color: #16a34a;">0.0%</span>
+                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-imputation-detail">
+                                Duration: 0.0% &middot; Distance: 0.0%
+                            </div>
+                        </div>
+
+                        <!-- Card 4: Drift (PSI) -->
+                        <div class="summary-card" style="padding: 1rem;">
+                            <span class="summary-label">Feature &amp; Pred Drift</span>
+                            <span class="summary-value" id="ml-drift-status" style="font-size: 1.4rem; color: #16a34a;">STABLE</span>
+                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-drift-detail">
+                                PSI &lt; 0.10 (vs Baseline)
+                            </div>
+                        </div>
+
+                        <!-- Card 5: Outcome Performance -->
+                        <div class="summary-card" style="padding: 1rem;">
+                            <span class="summary-label">Delayed Outcomes</span>
+                            <span class="summary-value" id="ml-outcomes-evaluated" style="font-size: 1.4rem; color: #475569;">0 / 0</span>
+                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-brier-detail">
+                                Brier: Pending Evaluation
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Split Workbenches: Live Predictor & Outcome Ingestion -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+                        <!-- Left Workbench: Interactive Inference Tester -->
+                        <section class="card" style="margin-bottom: 0;">
+                            <div class="card-header" style="padding: 0.85rem 1rem;">
+                                <div>
+                                    <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Live Prediction Tester</h3>
+                                    <p class="section-desc" style="font-size: 0.75rem; margin: 0.15rem 0 0;">Test real model inference, geofencing &amp; circuit breaker fallback</p>
+                                </div>
+                                <div style="display: flex; gap: 0.35rem;">
+                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('UA240')">UA240 (ORD-SFO)</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('6E501')">6E501 (DEL-BOM)</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('SY350')">SY350 (ORD-DFW)</button>
+                                </div>
+                            </div>
+                            <div style="padding: 1rem;">
+                                <form id="ml-predict-form" onsubmit="submitLivePrediction(event)">
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Flight Number *</label>
+                                            <input type="text" id="ml-pred-flight" value="UA240" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Carrier Code *</label>
+                                            <input type="text" id="ml-pred-carrier" value="UA" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Origin Airport *</label>
+                                            <input type="text" id="ml-pred-origin" value="ORD" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Dest Airport *</label>
+                                            <input type="text" id="ml-pred-dest" value="SFO" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.85rem;">
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Dep Time (HH:MM)</label>
+                                            <input type="text" id="ml-pred-deptime" value="18:45" style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Departure Date</label>
+                                            <input type="date" id="ml-pred-depdate" value="2024-07-15" style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <button type="submit" class="btn btn-primary btn-sm" id="ml-predict-btn" style="background: #0284c7; color: white;">
+                                            ⚡ Execute Inference
+                                        </button>
+                                        <span id="ml-predict-latency" style="font-size: 0.75rem; color: #64748b;">Ready</span>
+                                    </div>
+                                </form>
+                                <div id="ml-predict-result" style="margin-top: 0.85rem; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.8rem; min-height: 90px;">
+                                    <span style="color: #64748b;">Prediction output will appear here.</span>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Right Workbench: Ground Truth Delayed Outcome Ingest -->
+                        <section class="card" style="margin-bottom: 0;">
+                            <div class="card-header" style="padding: 0.85rem 1rem;">
+                                <div>
+                                    <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Delayed Ground Truth Ingestion</h3>
+                                    <p class="section-desc" style="font-size: 0.75rem; margin: 0.15rem 0 0;">Ingest actual delay/cancellation to evaluate model calibration &amp; Brier scores</p>
+                                </div>
+                            </div>
+                            <div style="padding: 1rem;">
+                                <form id="ml-outcome-form" onsubmit="submitGroundTruthOutcome(event)">
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Flight Number *</label>
+                                            <input type="text" id="ml-out-flight" value="UA240" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Carrier Code *</label>
+                                            <input type="text" id="ml-out-carrier" value="UA" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Origin *</label>
+                                            <input type="text" id="ml-out-origin" value="ORD" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Destination *</label>
+                                            <input type="text" id="ml-out-dest" value="SFO" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Flight Date *</label>
+                                            <input type="date" id="ml-out-date" value="2024-07-15" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Actual Dep Delay (Min)</label>
+                                            <input type="number" id="ml-out-delay" value="145" style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                                        </div>
+                                    </div>
+                                    <div style="margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                                        <input type="checkbox" id="ml-out-cancelled">
+                                        <label for="ml-out-cancelled" style="font-size: 0.78rem; font-weight: 600; color: #334155;">Flight Was Actually Cancelled</label>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <button type="submit" class="btn btn-primary btn-sm" id="ml-outcome-btn" style="background: #059669; color: white;">
+                                            📥 Ingest &amp; Match Ground Truth
+                                        </button>
+                                        <span id="ml-outcome-feedback" style="font-size: 0.75rem; color: #64748b;">Ready</span>
+                                    </div>
+                                </form>
+                                <div id="ml-outcome-result" style="margin-top: 0.85rem; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.8rem; min-height: 90px;">
+                                    <span style="color: #64748b;">Outcome ingestion status and matching updates will appear here.</span>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Model Governance & Checksum Integrity Card -->
+                    <section class="card">
+                        <div class="card-header" style="padding: 0.85rem 1rem;">
+                            <div>
+                                <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Model Governance &amp; Artifact Checksums</h3>
+                                <p class="section-desc" style="font-size: 0.75rem; margin: 0.15rem 0 0;">Cryptographic SHA-256 hashes, dataset coverage &amp; rollback readiness</p>
+                            </div>
+                            <div>
+                                <span class="badge" style="background: #f1f5f9; color: #334155; font-weight: 600;">9 Artifacts Verified</span>
+                            </div>
+                        </div>
+                        <div style="padding: 1rem; font-size: 0.8rem;" id="ml-governance-container">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+                                <div>
+                                    <strong style="color: #0f172a;">Active Model Version:</strong> v2.0.0-multiseason<br>
+                                    <strong style="color: #0f172a;">Historical Records:</strong> 1,707,271 records (BTS 2024 Jan, Apr, Jul)<br>
+                                    <strong style="color: #0f172a;">Feature Dimensionality:</strong> 79 features (strictly future-leakage free)<br>
+                                    <strong style="color: #0f172a;">Airspace Coverage:</strong> 334 US domestic BTS airports &middot; 15 carriers
+                                </div>
+                                <div>
+                                    <strong style="color: #0f172a;">Rollback Target:</strong> v1_backup (January 2024 single-month)<br>
+                                    <strong style="color: #0f172a;">Rollback Readiness:</strong> <span style="color: #16a34a; font-weight: 700;">READY (v1 artifacts present in ml/artifacts/v1_backup)</span><br>
+                                    <strong style="color: #0f172a;">Storage Engine:</strong> SQLite WAL mode (zero PII logged)<br>
+                                    <strong style="color: #0f172a;">Circuit Breaker:</strong> 3 consecutive failures threshold &middot; 5,000ms cooldown
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- SECTION 6: OPERATIONS CONTROL CENTER -->
+                <div class="section-view" id="view-ops" style="display: none;">
+                    <!-- Operations Header Banner -->
+                    <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                <span style="background: #0f172a; color: white; font-size: 0.72rem; font-weight: 750; padding: 0.2rem 0.55rem; border-radius: 4px; letter-spacing: 0.03em;">
+                                    STAGE 7 CONTROL
+                                </span>
+                                <div>
+                                    <h2 style="font-size: 1.15rem; font-weight: 750; color: #0f172a; margin: 0; line-height: 1.2;">
+                                        Enterprise Disruption Operations Control Center
+                                    </h2>
+                                    <p style="font-size: 0.8rem; color: #475569; margin: 0.2rem 0 0 0;">
+                                        Live Provider Health, Distributed Saga Monitoring, Manual Intervention Desk &amp; Financial Ledger
+                                    </p>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary btn-sm" onclick="fetchOpsData(false)" style="font-size: 0.75rem;">
+                                    ⟳ Refresh Ops
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Operational Summary KPI Cards -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div class="summary-card">
+                            <span class="summary-label">Active Disruption Cases</span>
+                            <span class="summary-value" id="ops-active-count">0</span>
+                        </div>
+                        <div class="summary-card" style="border-left: 4px solid #f59e0b;">
+                            <span class="summary-label">Manual Intervention Desk</span>
+                            <span class="summary-value" id="ops-manual-count" style="color: #b45309;">0</span>
+                        </div>
+                        <div class="summary-card" style="border-left: 4px solid #ef4444;">
+                            <span class="summary-label">Failed / Escalated Sagas</span>
+                            <span class="summary-value" id="ops-failed-count" style="color: #dc2626;">0</span>
+                        </div>
+                        <div class="summary-card" style="border-left: 4px solid #10b981;">
+                            <span class="summary-label">Successfully Resolved</span>
+                            <span class="summary-value" id="ops-resolved-count" style="color: #059669;">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Provider Availability Matrix -->
+                    <section class="card" style="margin-bottom: 1.5rem;">
+                        <div class="card-header" style="padding: 0.85rem 1rem;">
+                            <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Airline, Messaging &amp; Platform Provider Health</h3>
+                        </div>
+                        <div style="padding: 1rem;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem;" id="ops-provider-grid">
+                                <div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                        <strong style="color: #0f172a; font-size: 0.85rem;">Amadeus GDS Portal</strong>
+                                        <span class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.7rem;">SANDBOX</span>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: #64748b;">Circuit Breaker: CLOSED (Healthy)</div>
+                                </div>
+                                <div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                        <strong style="color: #0f172a; font-size: 0.85rem;">Meta WhatsApp Cloud API</strong>
+                                        <span class="badge" style="background: #dcfce7; color: #166534; font-size: 0.7rem;">SANDBOX / SIGNED</span>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: #64748b;">HMAC-SHA256: ACTIVE</div>
+                                </div>
+                                <div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                        <strong style="color: #0f172a; font-size: 0.85rem;">Salesforce Service Cloud</strong>
+                                        <span class="badge" style="background: #f1f5f9; color: #475569; font-size: 0.7rem;">SANDBOX / IDEMPOTENT</span>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: #64748b;">Upsert: External ID Mapping</div>
+                                </div>
+                                <div style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                        <strong style="color: #0f172a; font-size: 0.85rem;">PostgreSQL 16 &amp; Redis</strong>
+                                        <span class="badge" style="background: #dcfce7; color: #166534; font-size: 0.7rem;">LIVE</span>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: #64748b;">Optimistic Locking: ACTIVE (v9)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Manual Intervention & Escalated Cases Queue -->
+                    <section class="card" style="margin-bottom: 1.5rem;">
+                        <div class="card-header" style="padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Ticketing Desk Manual Intervention Queue</h3>
+                                <p class="section-desc" style="font-size: 0.75rem; margin: 0.15rem 0 0;">Cases requiring human verification after external timeouts or ambiguous provider outcomes</p>
+                            </div>
+                        </div>
+                        <div style="padding: 0.5rem 1rem 1rem;">
+                            <div class="table-container">
+                                <table class="data-table" style="font-size: 0.8rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Case ID</th>
+                                            <th>Passenger</th>
+                                            <th>State</th>
+                                            <th>Ambiguity / Failure Reason</th>
+                                            <th>Manual Desk Action</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ops-intervention-tbody">
+                                        <tr>
+                                            <td colspan="6" class="loading-state" style="text-align: center; color: #64748b; padding: 1.5rem;">
+                                                Loading manual intervention cases...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </section>
                 </div>
