@@ -44,8 +44,8 @@ fi
 echo "Checking FlyoDataSeeder profile restrictions..."
 SEEDER_FILE="${ROOT_DIR}/flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/config/FlyoDataSeeder.java"
 if [ -f "${SEEDER_FILE}" ]; then
-    if grep -q '@Profile("!prod")' "${SEEDER_FILE}" && grep -q 'flyo.seeding.enabled' "${SEEDER_FILE}"; then
-        log_pass "FlyoDataSeeder is guarded with @Profile(\"!prod\") and flyo.seeding.enabled flag."
+    if (grep -q '@Profile("!prod")' "${SEEDER_FILE}" || grep -q '@Profile({"dev", "demo", "test"})' "${SEEDER_FILE}") && grep -q 'flyo.seeding.enabled' "${SEEDER_FILE}"; then
+        log_pass "FlyoDataSeeder is guarded with non-production profile isolation and flyo.seeding.enabled flag."
     else
         log_fail "FlyoDataSeeder missing production lockout guard!"
     fi

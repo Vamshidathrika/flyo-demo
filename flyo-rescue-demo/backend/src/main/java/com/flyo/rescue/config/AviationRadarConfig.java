@@ -60,6 +60,9 @@ public class AviationRadarConfig {
     }
 
     public boolean isMockMode() {
+        if (environment != null && environment.matchesProfiles("prod")) {
+            return false; // Mock mode is strictly forbidden in production
+        }
         if (environment == null || !environment.matchesProfiles("dev", "demo", "test")) {
             return false; // Mock mode is strictly forbidden unless explicitly activated in dev, demo, or test profiles
         }

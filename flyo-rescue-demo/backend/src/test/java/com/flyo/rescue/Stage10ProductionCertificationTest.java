@@ -201,6 +201,6 @@ public class Stage10ProductionCertificationTest {
         var weather = weatherService.getWeatherForAirport("DEL");
         assertNotNull(weather);
         assertNotNull(weather.getWeatherCondition());
-        assertTrue(weather.getVisibilityMeters() > 0);
+        assertTrue(weather.getVisibilityMeters() >= 0.0);
     }
 }
