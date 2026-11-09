@@ -64,7 +64,8 @@ public class FlightSearchService {
 
                     int rank = 1;
                     for (AmadeusFlightOfferDto offer : offers) {
-                        String optId = caseId + "-OPT-" + offer.offerId();
+                        String shortCaseId = caseId.length() > 10 ? caseId.substring(0, 10) : caseId;
+                        String optId = shortCaseId + "-OPT-" + offer.offerId();
                         String flNumber = offer.carrierCode() + "-" + offer.flightNumber();
                         String flRoute = offer.departureAirport() + " → " + offer.arrivalAirport();
                         int arrMinutes = parseTimeInMinutes(offer.arrivalTime());

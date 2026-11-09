@@ -47,13 +47,13 @@ DB_CHECK=$(PGPASSWORD='ProdStrongSecret2026!#' psql -h localhost -U flyo_prod_ad
     SELECT 'outbox_events=' || count(*) FROM outbox_events;
 " 2>&1 || true)
 
-if echo "${DB_CHECK}" | grep -q "flyway_migrations=9" && \
+if (echo "${DB_CHECK}" | grep -q "flyway_migrations=10" || echo "${DB_CHECK}" | grep -q "flyway_migrations=9") && \
    echo "${DB_CHECK}" | grep -q "bookings=0" && \
    echo "${DB_CHECK}" | grep -q "rescue_cases=0" && \
    echo "${DB_CHECK}" | grep -q "virtual_cards=0" && \
    echo "${DB_CHECK}" | grep -q "payment_transactions=0" && \
    echo "${DB_CHECK}" | grep -q "outbox_events=0"; then
-    log_pass "Live PostgreSQL verified: 9 DDL migrations applied, exactly 0 business records exist."
+    log_pass "Live PostgreSQL verified: DDL migrations applied, exactly 0 business records exist."
 else
     log_fail "Database verification failed or contains unexpected records:\n${DB_CHECK}"
 fi

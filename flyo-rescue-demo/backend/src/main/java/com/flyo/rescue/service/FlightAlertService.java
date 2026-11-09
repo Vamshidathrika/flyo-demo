@@ -95,6 +95,13 @@ public class FlightAlertService {
             // Trigger Disruption Detection
             RescueCase rescueCase = caseService.simulateCancellation(booking.getId(), status);
 
+            // If case is in flight / reconciling / terminal, do not re-rank options or force state transition
+            if ("RECONCILING".equals(rescueCase.getState()) || "DONE".equals(rescueCase.getState())
+                    || "FAILED_ESCALATED".equals(rescueCase.getState()) || "ESCALATED".equals(rescueCase.getState())) {
+                createdCases.add(rescueCase);
+                continue;
+            }
+
             // Immediately rank recovery options
             caseService.generateAndRankOptions(rescueCase.getId());
 
