@@ -1,0 +1,88 @@
+name: Flyo Stage 12 Scheduled Full Benchmark & Multi-Agent Evaluation
+
+on:
+  schedule:
+    # Run every Monday at 02:00 UTC
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      agents:
+        description: 'Comma-separated agents to evaluate (e.g. baseline,claude,gemini)'
+        required: false
+        default: 'baseline'
+      runs_per_task:
+        description: 'Number of trials per benchmark task'
+        required: false
+        default: '3'
+
+concurrency:
+  group: flyo-scheduled-benchmark-eval
+  cancel-in-progress: false
+
+jobs:
+  full-benchmark-evaluation:
+    name: Full 7-Task Multi-Agent Benchmark Suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: flyodb
+          POSTGRES_USER: flyo_admin
+          POSTGRES_PASSWORD: flyo_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout Code with Full History
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install ML & Benchmark Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ml/requirements.txt
+          pip install pyyaml
+
+      - name: Execute Full 7-Task Benchmark Suite
+        run: |
+          mkdir -p .eval_results/runs
+          for task_yaml in tasks/flyo/*.yaml; do
+            echo "Executing full benchmark on ${task_yaml}..."
+            ./bin/agent-eval run --task "${task_yaml}" --agent baseline --runs ${{ github.event.inputs.runs_per_task || 3 }}
+          done
+
+      - name: Generate Comparative Markdown & JSON Scoreboards
+        run: |
+          ./bin/agent-eval report --format markdown > latest_benchmark_report.md
+          ./bin/agent-eval report --format json > latest_benchmark_report.json
+          ./bin/agent-eval compare --baseline FLYO_BENCHMARK_BASELINE.json --agent baseline --format markdown >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Benchmark Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flyo-stage12-benchmark-results
+          path: |
+            latest_benchmark_report.md
+            latest_benchmark_report.json
+            .eval_results/results.jsonl
+            .eval_results/runs/*.json

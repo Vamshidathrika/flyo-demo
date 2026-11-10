@@ -1,0 +1,86 @@
+name: Flyo Stage 12 Benchmark Quality Gate
+
+on:
+  pull_request:
+    branches: [ main, develop, "release/*" ]
+    paths:
+      - 'flyo-rescue-demo/backend/**'
+      - 'ml/**'
+      - 'tasks/flyo/**'
+      - 'scripts/**'
+      - 'FLYO_BENCHMARK_BASELINE.json'
+      - '.github/workflows/benchmark-gate.yml'
+
+concurrency:
+  group: flyo-pr-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark-quality-gate:
+    name: Continuous Engineering Evaluation & Regression Gate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: flyodb
+          POSTGRES_USER: flyo_admin
+          POSTGRES_PASSWORD: flyo_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout Code with Full History
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ML and Benchmark Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ml/requirements.txt
+          pip install pyyaml
+
+      - name: Verify Protected Judge & Baseline Integrity
+        run: |
+          python3 scripts/test_judge_protection.py
+
+      - name: Execute Authoritative Security & Regression Test Suites
+        run: |
+          mvn test -f flyo-rescue-demo/backend/pom.xml \
+            -Dtest="FlyoDataSeederProfileTest,Stage9BAdversarialProductionConfigTest,Stage6EnterpriseSecurityAdversarialTest,ConcurrencyAndLoadTest,IdempotencyTest,Stage6DistributedSagaReliabilityTest,ProviderIntegrationAndTenantTest,PnrIngestionTest"
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          POSTGRES_URL: jdbc:postgresql://localhost:5432/flyodb
+          POSTGRES_USER: flyo_admin
+          POSTGRES_PASSWORD: flyo_test_password
+
+      - name: Evaluate Invariants Against Frozen Baseline
+        id: eval_compare
+        run: |
+          ./bin/agent-eval compare --baseline FLYO_BENCHMARK_BASELINE.json --agent baseline --format markdown > comparison_report.md
+          cat comparison_report.md >> $GITHUB_STEP_SUMMARY
+          ./bin/agent-eval compare --baseline FLYO_BENCHMARK_BASELINE.json --agent baseline --strict
