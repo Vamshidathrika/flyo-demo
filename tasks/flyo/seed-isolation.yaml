@@ -1,0 +1,62 @@
+name: seed-isolation
+version: "1.0.0"
+category: security
+tier: core-isolation
+description: Enforce that database seeding is strictly isolated behind positive Spring profiles (dev, demo, test) and never runs in production, staging, or default unset profiles.
+repo: .
+commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+timeout: 180
+max_changes: 10
+
+files:
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/config/FlyoDataSeeder.java
+  - flyo-rescue-demo/backend/src/main/resources/application.properties
+  - flyo-rescue-demo/backend/src/main/resources/application-demo.properties
+  - flyo-rescue-demo/backend/src/main/resources/application-dev.properties
+  - flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/config/FlyoDataSeederProfileTest.java
+
+prompt: |
+  Fix and harden the database seeding configuration in Flyo Rescue backend:
+  1. Ensure com.flyo.rescue.config.FlyoDataSeeder is guarded by strictly positive profiles:
+     @Profile({"dev", "demo", "test"}) and @ConditionalOnProperty(name = "flyo.seeding.enabled", havingValue = "true", matchIfMissing = false).
+     Never use negative profiles like @Profile("!prod") which leak into staging or default profiles.
+  2. Set flyo.seeding.enabled=false in application.properties by default.
+  3. Ensure application-demo.properties and application-dev.properties explicitly configure flyo.seeding.enabled=true.
+  4. Ensure automated test FlyoDataSeederProfileTest passes cleanly, asserting that the seeder bean is present under dev, demo, test and strictly absent under prod, staging, and default profiles.
+
+setup:
+  - command: "mvn -f flyo-rescue-demo/backend/pom.xml compile -DskipTests"
+    description: "Verify backend sources compile cleanly before task execution"
+
+judge:
+  - type: command
+    name: "Seeder Profile Boundary Test Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=FlyoDataSeederProfileTest"
+    description: "Executes 7 Spring ApplicationContextRunner tests verifying bean presence and absence across profiles"
+  - type: grep
+    name: "Positive Profile Annotation Enforcement"
+    pattern: '@Profile\(\{"dev",\s*"demo",\s*"test"\}\)'
+    files: "flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/config/FlyoDataSeeder.java"
+    description: "Verify FlyoDataSeeder contains explicit positive profile list"
+  - type: grep
+    name: "Conditional Property Guard Enforcement"
+    pattern: '@ConditionalOnProperty\(name\s*=\s*"flyo\.seeding\.enabled",\s*havingValue\s*=\s*"true",\s*matchIfMissing\s*=\s*false\)'
+    files: "flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/config/FlyoDataSeeder.java"
+    description: "Verify property condition prevents default execution without explicit opt-in"
+  - type: grep
+    name: "Default Configuration Security Guard"
+    pattern: 'flyo\.seeding\.enabled=false'
+    files: "flyo-rescue-demo/backend/src/main/resources/application.properties"
+    description: "Default configuration must keep seeding strictly disabled"
+
+acceptance_criteria:
+  - "FlyoDataSeeder bean is instantiated when active profile is 'dev' and flyo.seeding.enabled=true"
+  - "FlyoDataSeeder bean is instantiated when active profile is 'demo' and flyo.seeding.enabled=true"
+  - "FlyoDataSeeder bean is instantiated when active profile is 'test' and flyo.seeding.enabled=true"
+  - "FlyoDataSeeder bean is NOT instantiated when active profile is 'prod'"
+  - "FlyoDataSeeder bean is NOT instantiated when active profile is 'staging'"
+  - "FlyoDataSeeder bean is NOT instantiated when active profile is default/unset"
+  - "FlyoDataSeeder bean is NOT instantiated when flyo.seeding.enabled is false"
+
+cleanup:
+  - "git checkout -- ."

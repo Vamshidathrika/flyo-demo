@@ -1,0 +1,41 @@
+name: pnr-ingestion
+version: "1.0.0"
+category: robustness
+tier: domain-parsers
+description: Robust PNR ingestion and parsing across complex GDS formats, multi-passenger bookings, multi-segment connections, overnight flights, and malformed messages without synthetic flight fabrication.
+repo: .
+commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+timeout: 240
+max_changes: 15
+
+files:
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/PnrIngestionService.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/controller/IngestionController.java
+  - flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/PnrIngestionTest.java
+
+prompt: |
+  Harden the PNR Ingestion service in Flyo Rescue:
+  1. Parse multi-passenger GDS strings into distinct passenger itineraries linked by booking reference.
+  2. Correctly handle multi-segment itineraries with transit airports and overnight connections across UTC boundaries without date shifting.
+  3. Reject malformed or unparseable PNR formats with clear 400 Bad Request error details without fabricating synthetic default flight numbers.
+  4. Deduplicate repeated PNR updates by recording versioned snapshots in the audit log.
+  5. Ensure all tests in PnrIngestionTest pass with 0 errors.
+
+setup:
+  - command: "mvn -f flyo-rescue-demo/backend/pom.xml compile -DskipTests"
+    description: "Verify backend sources compile cleanly before task execution"
+
+judge:
+  - type: command
+    name: "PNR Ingestion Test Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=PnrIngestionTest"
+    description: "Verifies parsing of Amadeus, Sabre, and Travelport PNR structures, multi-segment flights, and error cases"
+
+acceptance_criteria:
+  - "Multi-passenger booking records all passengers under unified PNR reference"
+  - "Multi-segment itineraries maintain chronological flight sequence and minimum connection buffers"
+  - "Malformed PNR input returns 400 Bad Request with actionable validation error"
+  - "Missing flight numbers in PNR payload do not invent fabricated flights or default schedules"
+
+cleanup:
+  - "git checkout -- ."

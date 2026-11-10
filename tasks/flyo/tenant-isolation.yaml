@@ -1,0 +1,46 @@
+name: tenant-isolation
+version: "1.0.0"
+category: security
+tier: enterprise-multi-tenancy
+description: Enforce impenetrable tenant boundaries preventing cross-tenant data reads, case updates, payment modifications, or header spoofing across airline operators.
+repo: .
+commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+timeout: 240
+max_changes: 15
+
+files:
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/security/TenantFilter.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/CaseService.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/BookingService.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/payment/PaymentService.java
+  - flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage3EnterpriseSecurityTest.java
+
+prompt: |
+  Harden multi-tenant data isolation and security filtering in Flyo Rescue:
+  1. In TenantFilter, block all unauthenticated or spoofed X-Tenant-ID headers. The caller's tenant must match their authenticated JWT authorizedTenants claim.
+  2. In CaseService, verify that requests for cases belonging to tenant B made by operators from tenant A are rejected with HTTP 403 Forbidden or SecurityException.
+  3. In BookingService and PaymentService, ensure all database queries enforce tenantId matching in SQL predicates.
+  4. Ensure all 18 security tests in Stage3EnterpriseSecurityTest pass with 0 errors.
+
+setup:
+  - command: "mvn -f flyo-rescue-demo/backend/pom.xml compile -DskipTests"
+    description: "Verify backend sources compile cleanly before task execution"
+
+judge:
+  - type: command
+    name: "Enterprise Multi-Tenant Security Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=Stage3EnterpriseSecurityTest"
+    description: "Verifies cross-tenant case blocking, spoofed header rejection, and operator role scopes"
+  - type: command
+    name: "Provider and Tenant Integration Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=ProviderIntegrationAndTenantTest"
+    description: "Verifies tenant context propagation across external provider adapters and queues"
+
+acceptance_criteria:
+  - "Unauthenticated client attempting to set X-Tenant-ID header is blocked"
+  - "Operator authenticated under tenant_alpha receives 403 Forbidden when accessing tenant_beta case"
+  - "Database queries include tenant_id filter preventing cross-tenant data leakage"
+  - "Distributed rate limiting is keyed per-tenant preventing noisy neighbor starvation"
+
+cleanup:
+  - "git checkout -- ."

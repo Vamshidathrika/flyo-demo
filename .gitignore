@@ -33,3 +33,7 @@ __pycache__/
 ml/data/raw/
 ml/data/processed/
 ml/data/weather/
+
+# Agent Evaluation Worktrees & Run Dumps
+.eval_worktrees/
+.eval_results/runs/

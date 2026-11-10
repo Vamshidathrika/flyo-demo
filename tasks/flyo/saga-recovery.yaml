@@ -1,0 +1,45 @@
+name: saga-recovery
+version: "1.0.0"
+category: resilience
+tier: distributed-coordination
+description: Verify distributed saga orchestrator recovers cleanly from worker crashes, expired leases, uncertain provider outcomes, and application restarts without blind retries.
+repo: .
+commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+timeout: 300
+max_changes: 20
+
+files:
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/saga/SagaExecutionWorker.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/saga/SagaStepExecution.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/saga/SagaCoordinator.java
+  - flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage6DistributedSagaReliabilityTest.java
+
+prompt: |
+  Harden the distributed saga orchestration engine in Flyo Rescue:
+  1. In SagaExecutionWorker, ensure that orphaned or expired saga step leases (heartbeat > timeout) are reclaimed by surviving workers upon application restart.
+  2. For steps in UNCERTAIN or TIMED_OUT states (such as airline checkout timeout), enforce reconciliation verification with the provider before attempting re-execution, preventing duplicate ticketing.
+  3. Ensure compensating transactions execute in reverse order when any step encounters a fatal failure.
+  4. Ensure all tests in Stage6DistributedSagaReliabilityTest and OutboxAndSagaIntegrationTest pass with 0 errors.
+
+setup:
+  - command: "mvn -f flyo-rescue-demo/backend/pom.xml compile -DskipTests"
+    description: "Verify backend sources compile cleanly before task execution"
+
+judge:
+  - type: command
+    name: "Distributed Saga Reliability Test Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=Stage6DistributedSagaReliabilityTest"
+    description: "Simulates worker crashes, lease timeouts, and outbox event recovery"
+  - type: command
+    name: "Outbox and Saga Integration Test Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=OutboxAndSagaIntegrationTest"
+    description: "Verifies reliable message delivery, step order preservation, and compensation flow"
+
+acceptance_criteria:
+  - "Orphaned saga execution leases are reclaimed automatically within lease recovery threshold"
+  - "Uncertain provider outcomes trigger reconciliation instead of blind execution retry"
+  - "Step compensations execute in reverse topological order upon failure"
+  - "Application restart recovers and completes pending in-flight sagas from database outbox"
+
+cleanup:
+  - "git checkout -- ."

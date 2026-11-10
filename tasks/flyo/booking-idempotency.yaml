@@ -1,0 +1,50 @@
+name: booking-idempotency
+version: "1.0.0"
+category: correctness
+tier: distributed-safety
+description: Ensure booking execution, payment settlement, and webhook ingestion are strictly idempotent under concurrent and duplicate requests without duplicate orders or double-charges.
+repo: .
+commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+timeout: 300
+max_changes: 20
+
+files:
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/CaseStateMachineService.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/payment/PaymentService.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/integration/webhook/WebhookEventProcessor.java
+  - flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/IdempotencyTest.java
+  - flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/ConcurrencyAndLoadTest.java
+
+prompt: |
+  Enforce mathematical idempotency and concurrent safety across booking, payments, and webhook ingestion:
+  1. In CaseStateMachineService, ensure transition to REBOOKING/DONE locks the case row and returns the existing confirmed PNR on repeated requests without re-triggering airline providers.
+  2. In PaymentService, verify that duplicate authorization calls for the same caseId/bookingId return the existing virtual card / charge reference rather than creating a second charge.
+  3. In WebhookEventProcessor, verify that incoming events with duplicate event IDs or idempotency keys return cached success in <10ms without mutating domain entities twice.
+  4. Ensure all tests in IdempotencyTest, ConcurrencyAndLoadTest, and FinancialAndBookingSafetyTest pass with 0 errors.
+
+setup:
+  - command: "mvn -f flyo-rescue-demo/backend/pom.xml compile -DskipTests"
+    description: "Verify backend sources compile cleanly before task execution"
+
+judge:
+  - type: command
+    name: "Idempotency Test Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=IdempotencyTest"
+    description: "Verifies repeated execution, duplicate webhook processing, and replay protection"
+  - type: command
+    name: "Concurrency and Load Test Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=ConcurrencyAndLoadTest"
+    description: "Verifies multithreaded concurrent requests against identical cases and bookings"
+  - type: command
+    name: "Financial and Booking Safety Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=FinancialAndBookingSafetyTest"
+    description: "Verifies spend limits, single-use VCC locks, and double-charge prevention"
+
+acceptance_criteria:
+  - "Second call to rebook returns the identical confirmed PNR in <10ms without external provider call"
+  - "Concurrent worker threads racing to rebook the same case produce exactly 1 airline booking and 1 charge"
+  - "Duplicate webhook events return identical success response without duplicate database state transitions"
+  - "Virtual card authorized amount cannot be charged multiple times beyond authorized cap"
+
+cleanup:
+  - "git checkout -- ."

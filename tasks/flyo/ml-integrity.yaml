@@ -1,0 +1,49 @@
+name: ml-integrity
+version: "1.0.0"
+category: intelligence
+tier: predictive-safety
+description: Ensure ML inference microservice maintains model artifact integrity, strict SHA-256 checksums, unsupported corridor fail-safe handling, and zero data leakage across chronological datasets.
+repo: .
+commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+timeout: 180
+max_changes: 15
+
+files:
+  - ml/service/main.py
+  - ml/service/predictor.py
+  - ml/service/monitoring_db.py
+  - ml/tests/test_service.py
+  - ml/tests/test_monitoring.py
+  - ml/tests/test_models.py
+
+prompt: |
+  Harden the ML predictive microservice in ml/service:
+  1. Validate SHA-256 checksums of trained Random Forest and Gradient Boosting model artifacts during service startup. If artifacts are corrupted or modified, refuse to start.
+  2. In inference.py, if a flight operates in an uncalibrated or unsupported airspace corridor, return an explicit UNSUPPORTED_AIRSPACE status with calibrated baseline fallback rather than fabricating high-confidence risk scores.
+  3. Ensure no data leakage occurs across time: test sets must be strictly chronologically partitioned after training timestamps.
+  4. In monitoring_db.py, detect stale predictions and log concept drift metrics without throwing unhandled exceptions.
+  5. Ensure all 36 unit and integration tests in ml/tests pass cleanly.
+
+setup:
+  - command: "./ml/.venv/bin/python -m pip list | grep -q fastapi"
+    description: "Verify Python ML virtual environment is configured with required dependencies"
+
+judge:
+  - type: command
+    name: "Python ML Microservice Unit & Integration Suite"
+    command: "./ml/.venv/bin/python -m unittest discover -s ml/tests"
+    description: "Executes all 36 tests covering inference, monitoring, drift, SHAP explainability, and error handling"
+  - type: grep
+    name: "Unsupported Airspace Corridor Guard"
+    pattern: "UNSUPPORTED_AIRSPACE"
+    files: "ml/service/predictor.py"
+    description: "Verify fail-safe status returned when requested route falls outside model training distribution"
+
+acceptance_criteria:
+  - "Model artifacts failing SHA-256 verification prevent microservice startup"
+  - "Inference on unsupported flight corridors returns UNSUPPORTED_AIRSPACE status with fallback flag"
+  - "Data drift and concept drift scores are computed dynamically from actual prediction logs"
+  - "36/36 ML tests pass with zero failures"
+
+cleanup:
+  - "git checkout -- ."

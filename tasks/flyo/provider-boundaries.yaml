@@ -1,0 +1,57 @@
+name: provider-boundaries
+version: "1.0.0"
+category: security
+tier: fail-closed-integrations
+description: Verify that production configuration rejects mock/demo adapters and fails closed with explicit blocked states upon missing credentials without fabricated responses.
+repo: .
+commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+timeout: 240
+max_changes: 15
+
+files:
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/rebook/AmadeusNdcBookingAdapter.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/rebook/PartnerPortalPlaywrightAdapter.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/payment/StripeIssuingPaymentAdapter.java
+  - flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/AviationRadarClient.java
+  - flyo-rescue-demo/backend/src/main/resources/application-prod.properties
+
+prompt: |
+  Harden the airline and payment provider adapters in Flyo Rescue backend:
+  1. Ensure AmadeusNdcBookingAdapter fails closed by throwing ProviderNotConfiguredException or ProviderException when API credentials are missing. Never invent a fallback PNR.
+  2. Ensure StripeIssuingPaymentAdapter throws ProviderNotConfiguredException when Stripe API keys are unset. Never fabricate synthetic virtual card numbers.
+  3. Ensure PartnerPortalPlaywrightAdapter is strictly isolated from production via @Profile("!prod").
+  4. Ensure AviationRadarClient returns Optional.empty() when radar telemetry API keys are unconfigured, failing closed rather than generating simulated flights.
+  5. Verify all tests in ProviderAdaptersIntegrationTest and Stage9BAdversarialProductionConfigTest pass cleanly.
+
+setup:
+  - command: "mvn -f flyo-rescue-demo/backend/pom.xml compile -DskipTests"
+    description: "Verify backend sources compile cleanly before task execution"
+
+judge:
+  - type: command
+    name: "Provider Adapters Integration Tests"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=ProviderAdaptersIntegrationTest"
+    description: "Verifies provider fail-closed contracts, credential validation, and exception dispatching"
+  - type: command
+    name: "Adversarial Production Config Test Suite"
+    command: "mvn -f flyo-rescue-demo/backend/pom.xml test -Dtest=Stage9BAdversarialProductionConfigTest"
+    description: "Verifies production rejects mock modes and enforces mandatory credentials"
+  - type: command
+    name: "Production Integrity Forensic Script"
+    command: "./scripts/verify-production-data-integrity"
+    description: "Executes repository-wide static and configuration check for fail-closed provider semantics"
+  - type: grep
+    name: "Playwright Adapter Profile Isolation"
+    pattern: '@Profile\("!prod"\)'
+    files: "flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/rebook/PartnerPortalPlaywrightAdapter.java"
+    description: "PartnerPortalPlaywrightAdapter must never be active in production"
+
+acceptance_criteria:
+  - "AmadeusNdcBookingAdapter fails closed with ProviderNotConfiguredException when unconfigured"
+  - "StripeIssuingPaymentAdapter fails closed with ProviderNotConfiguredException when unconfigured"
+  - "AviationRadarClient returns Optional.empty() without fabricating synthetic telemetry when unconfigured"
+  - "Production startup fails immediately if mock radar or synthetic fallback mode is enabled"
+  - "No code path generates random or hardcoded PNR codes upon provider failure"
+
+cleanup:
+  - "git checkout -- ."
