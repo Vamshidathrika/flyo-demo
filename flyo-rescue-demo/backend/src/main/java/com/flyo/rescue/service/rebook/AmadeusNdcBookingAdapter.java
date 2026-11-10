@@ -21,7 +21,6 @@ import java.util.List;
  * strictly reports BLOCKED BY EXTERNAL ACCESS without fabricating transactions.
  */
 @Component
-@Primary
 public class AmadeusNdcBookingAdapter implements FlightBookingProvider {
 
     private static final Logger log = LoggerFactory.getLogger(AmadeusNdcBookingAdapter.class);

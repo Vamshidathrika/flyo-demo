@@ -1,12 +1,12 @@
 {
   "version": "1.0.0-PROD-STAGE5",
-  "buildTimestamp": "2026-11-10T06:58:56.817Z",
+  "buildTimestamp": "2026-11-10T07:11:01.800Z",
   "entrypoint": "index.html",
   "bundles": {
     "js": {
-      "file": "app.1375e13b9a.min.js",
-      "sizeBytes": 129449,
-      "hash": "1375e13b9a"
+      "file": "app.cb640e296f.min.js",
+      "sizeBytes": 132188,
+      "hash": "cb640e296f"
     },
     "css": {
       "file": "style.5fe5ed7519.min.css",

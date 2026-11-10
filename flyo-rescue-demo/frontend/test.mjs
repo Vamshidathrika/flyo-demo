@@ -22,6 +22,7 @@ const requiredSelectors = [
     "portal-status-label",
     "toggle-portal-btn",
     "refresh-btn",
+    "refresh-telemetry-btn",
     "view-ananya"
 ];
 

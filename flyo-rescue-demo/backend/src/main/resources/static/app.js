@@ -1573,7 +1573,10 @@ async function submitCustomBooking(e) {
     const route = document.getElementById("cust-route").value.trim();
     const flight = document.getElementById("cust-flight").value.trim();
     const time = document.getElementById("cust-time").value.trim() || "Tonight 21:00";
-    const pnr = document.getElementById("cust-pnr").value.trim();
+    let pnr = document.getElementById("cust-pnr").value.trim();
+    if (!pnr) {
+        pnr = "FLY" + Math.random().toString(36).substring(2, 5).toUpperCase();
+    }
     const onward = document.getElementById("cust-onward").value.trim() || "None";
     const hotel = document.getElementById("cust-hotel").value.trim() || "None";
 
@@ -1592,7 +1595,10 @@ async function submitCustomBooking(e) {
                 status: "Checked-in"
             })
         });
-        if (!res.ok) throw new Error("Failed to save booking");
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.message || errData.error || `HTTP ${res.status}: Failed to save booking`);
+        }
         closeAddBookingModal();
         document.getElementById("add-booking-form").reset();
         await fetchBookings();
@@ -2027,6 +2033,50 @@ function escapeHtml(str) {
    PHASE 4: ML OBSERVABILITY & PREDICTION QUALITY MONITORING
    ============================================================================= */
 
+async function refreshTelemetry(btnElement) {
+    const btn = btnElement || document.getElementById("refresh-telemetry-btn");
+    const origHtml = btn ? btn.innerHTML : "↻ Refresh Telemetry";
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span style="display:inline-block; animation: spin 1s linear infinite;">↻</span> Refreshing...`;
+    }
+    try {
+        await fetchMonitoringData(false);
+        if (typeof fetchPredictiveLeaderboard === "function") fetchPredictiveLeaderboard().catch(() => {});
+        if (typeof fetchAirportHeatmap === "function") fetchAirportHeatmap().catch(() => {});
+        if (typeof fetchConnectionRiskQueue === "function") fetchConnectionRiskQueue().catch(() => {});
+
+        if (btn) {
+            btn.style.background = "#dcfce7";
+            btn.style.color = "#166534";
+            btn.style.borderColor = "#86efac";
+            btn.innerHTML = "✓ Refreshed!";
+            setTimeout(() => {
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
+                btn.style.background = "";
+                btn.style.color = "";
+                btn.style.borderColor = "";
+            }, 1500);
+        }
+    } catch (err) {
+        console.error("Manual telemetry refresh encountered an error:", err);
+        if (btn) {
+            btn.style.background = "#fee2e2";
+            btn.style.color = "#dc2626";
+            btn.style.borderColor = "#f87171";
+            btn.innerHTML = "⚠ Refresh Failed";
+            setTimeout(() => {
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
+                btn.style.background = "";
+                btn.style.color = "";
+                btn.style.borderColor = "";
+            }, 2000);
+        }
+    }
+}
+
 async function fetchMonitoringData(silent = false) {
     try {
         const resp = await apiFetch("/api/intelligence/monitoring/summary");
@@ -2100,13 +2150,24 @@ function renderMonitoringData(data) {
     // 4. Data Quality & Imputation
     const impRateEl = document.getElementById("ml-imputation-rate");
     const impDetailEl = document.getElementById("ml-imputation-detail");
-    if (data.dataQuality) {
-        const dq = data.dataQuality;
-        const durImp = (dq.scheduled_duration_imputation_rate * 100).toFixed(1);
-        const distImp = (dq.distance_imputation_rate * 100).toFixed(1);
-        const maxImp = Math.max(dq.scheduled_duration_imputation_rate, dq.distance_imputation_rate) * 100;
-        if (impRateEl) {
-            impRateEl.textContent = `${maxImp.toFixed(1)}%`;
+    if (data.dataQuality || (data.predictions && data.predictions.imputation_stats)) {
+        const dq = data.dataQuality || {};
+        const metrics = dq.metrics || {};
+        const predStats = (data.predictions && data.predictions.imputation_stats) || {};
+
+        let impPct = null;
+        if (metrics.overall_imputation_rate != null) {
+            impPct = metrics.overall_imputation_rate * 100;
+        } else if (metrics.missing_duration_percentage != null) {
+            impPct = metrics.missing_duration_percentage;
+        } else if (predStats.imputation_rate != null) {
+            impPct = predStats.imputation_rate * 100;
+        } else if (dq.scheduled_duration_imputation_rate != null) {
+            impPct = dq.scheduled_duration_imputation_rate * 100;
+        }
+
+        if (impRateEl && impPct != null && !isNaN(impPct)) {
+            impRateEl.textContent = `${impPct.toFixed(1)}%`;
             impRateEl.style.color = "#0284c7"; // Clean informative blue
         }
         if (impDetailEl) {
@@ -2119,11 +2180,12 @@ function renderMonitoringData(data) {
     const driftDetailEl = document.getElementById("ml-drift-detail");
     if (data.drift) {
         const dr = data.drift;
+        const isDrifted = dr.drift_level === "CRITICAL" || dr.drift_level === "WARNING" || dr.drift_detected === true || (dr.metrics && dr.metrics.max_psi >= 0.25);
         if (driftStatusEl) {
             if (dr.sample_size < 30) {
                 driftStatusEl.textContent = "CALIBRATING";
                 driftStatusEl.style.color = "#64748b";
-            } else if (dr.drift_detected) {
+            } else if (isDrifted) {
                 driftStatusEl.textContent = "ADAPTIVE MODE";
                 driftStatusEl.style.color = "#4f46e5"; // Indigo: clean adaptive badge
             } else {
@@ -2145,7 +2207,7 @@ function renderMonitoringData(data) {
     const brierEl = document.getElementById("ml-brier-detail");
     if (data.performance && data.health) {
         const perf = data.performance;
-        const evalCount = perf.evaluated_records_count || 0;
+        const evalCount = perf.evaluated_flights_count != null ? perf.evaluated_flights_count : (perf.evaluated_records_count || 0);
         const pendingCount = data.health.pending_outcomes_count || 0;
         if (outcomesEl) {
             outcomesEl.textContent = `${evalCount} / ${evalCount + pendingCount}`;

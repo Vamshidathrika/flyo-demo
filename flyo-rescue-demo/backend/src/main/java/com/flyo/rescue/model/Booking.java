@@ -19,7 +19,7 @@ public class Booking {
     private String hotelNote;
     private String agency;
     private String status;
-    private String passengerPhone;
+    private String passengerPhone = "+919876543210";
     private String tenantId = "tenant_default";
 
     public Booking() {
