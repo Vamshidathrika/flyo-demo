@@ -1,6 +1,75 @@
 let currentActiveCase = null;
 let lastChatCount = 0;
 let currentActiveView = "monitor";
+let authToken = localStorage.getItem("flyo_jwt_token");
+let currentOperator = JSON.parse(localStorage.getItem("flyo_operator") || "null");
+
+async function autoLoginDemoUser() {
+    try {
+        const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: "admin", password: "AdminSecret123!" })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.token) {
+                authToken = data.token;
+                currentOperator = {
+                    username: data.username || "admin",
+                    fullName: data.fullName || "System Admin",
+                    roles: data.roles || ["ROLE_ADMIN"]
+                };
+                localStorage.setItem("flyo_jwt_token", authToken);
+                localStorage.setItem("flyo_operator", JSON.stringify(currentOperator));
+                updateOperatorBadgeUI();
+                return true;
+            }
+        }
+    } catch (e) {
+        console.warn("[Flyo Auth] Auto-login attempt failed:", e);
+    }
+    return false;
+}
+
+function updateOperatorBadgeUI() {
+    const badgeText = document.getElementById("operator-status-text");
+    if (badgeText && currentOperator) {
+        badgeText.textContent = `Operator: ${currentOperator.fullName || currentOperator.username} (${currentOperator.roles ? currentOperator.roles[0] : 'ROLE_ADMIN'})`;
+    }
+}
+
+async function apiFetch(url, options = {}) {
+    options = options || {};
+    options.headers = options.headers || {};
+
+    if (!authToken && !url.includes("/api/auth/login")) {
+        await autoLoginDemoUser();
+    }
+
+    const applyAuth = (hdrs) => {
+        if (authToken) {
+            if (hdrs instanceof Headers) {
+                if (!hdrs.has("Authorization")) hdrs.set("Authorization", `Bearer ${authToken}`);
+            } else {
+                if (!hdrs["Authorization"] && !hdrs["authorization"]) hdrs["Authorization"] = `Bearer ${authToken}`;
+            }
+        }
+    };
+
+    applyAuth(options.headers);
+    let res = await fetch(url, options);
+
+    if (res.status === 401 && !url.includes("/api/auth/login")) {
+        console.warn("[Flyo Auth] Received 401 Unauthorized, re-authenticating session...");
+        const refreshed = await autoLoginDemoUser();
+        if (refreshed) {
+            applyAuth(options.headers);
+            res = await fetch(url, options);
+        }
+    }
+    return res;
+}
 
 function switchSectionView(tabName) {
     currentActiveView = tabName;
@@ -40,7 +109,11 @@ function switchSectionView(tabName) {
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    updateOperatorBadgeUI();
+    if (!authToken) {
+        await autoLoginDemoUser();
+    }
     fetchBookings();
     fetchActiveCases();
     fetchWhatsAppOperatorChat();
@@ -63,7 +136,7 @@ async function syncDashboard() {
 
 async function fetchOpsData(silent = false) {
     try {
-        const res = await fetch("/api/cases/operations-summary");
+        const res = await apiFetch("/api/cases/operations-summary");
         if (!res.ok) return;
         const data = await res.json();
 
@@ -112,7 +185,7 @@ async function fetchOpsData(silent = false) {
 async function fetchBookings() {
     const tbody = document.getElementById("bookings-tbody");
     try {
-        const response = await fetch("/api/bookings");
+        const response = await apiFetch("/api/bookings");
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -129,7 +202,7 @@ async function fetchBookings() {
 async function fetchCase(caseId) {
     if (!caseId) return;
     try {
-        const res = await fetch(`/api/cases/${encodeURIComponent(caseId)}`);
+        const res = await apiFetch(`/api/cases/${encodeURIComponent(caseId)}`);
         if (res.ok) {
             const data = await res.json();
             currentActiveCase = data;
@@ -142,7 +215,7 @@ async function fetchCase(caseId) {
 
 async function fetchActiveCases(silent = false) {
     try {
-        const response = await fetch("/api/cases");
+        const response = await apiFetch("/api/cases");
         if (!response.ok) return;
         const cases = await response.json();
         if (cases && cases.length > 0) {
@@ -224,7 +297,7 @@ function updateCaseSwitcher(cases) {
 
 async function selectActiveCase(caseId) {
     try {
-        const response = await fetch("/api/cases");
+        const response = await apiFetch("/api/cases");
         if (!response.ok) return;
         const cases = await response.json();
         const found = cases.find(c => c.id === caseId);
@@ -243,7 +316,7 @@ async function selectActiveCase(caseId) {
 
 async function openCaseForBooking(bookingId) {
     try {
-        const response = await fetch("/api/cases");
+        const response = await apiFetch("/api/cases");
         if (response.ok) {
             const cases = await response.json();
             const targetCase = cases.find(c => c.bookingId === bookingId || c.id === bookingId || (bookingId === "B1" && c.id === "C1") || c.id === "CASE-" + bookingId);
@@ -273,7 +346,7 @@ async function simulateCancellation(bookingId) {
     }
 
     try {
-        const response = await fetch(`/api/cases/simulate?bookingId=${encodeURIComponent(bookingId)}&type=CANCELLED&notifyPassenger=true`, {
+        const response = await apiFetch(`/api/cases/simulate?bookingId=${encodeURIComponent(bookingId)}&type=CANCELLED&notifyPassenger=true`, {
             method: "POST"
         });
         if (!response.ok) {
@@ -300,13 +373,13 @@ async function simulateCancellation(bookingId) {
 
 async function fetchOptions(caseId) {
     try {
-        const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/options`);
+        const response = await apiFetch(`/api/cases/${encodeURIComponent(caseId)}/options`);
         if (!response.ok) return;
         const options = await response.json();
         renderOptions(options);
 
         // Refresh active case so state badge smoothly updates to OPTIONS_READY
-        const caseRes = await fetch(`/api/cases/${encodeURIComponent(caseId)}`);
+        const caseRes = await apiFetch(`/api/cases/${encodeURIComponent(caseId)}`);
         if (caseRes.ok) {
             currentActiveCase = await caseRes.json();
             renderCase(currentActiveCase, true);
@@ -318,7 +391,7 @@ async function fetchOptions(caseId) {
 
 async function approveOption(caseId, optionId) {
     try {
-        const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/approve`, {
+        const response = await apiFetch(`/api/cases/${encodeURIComponent(caseId)}/approve`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -350,7 +423,7 @@ async function rejectCase(caseId) {
     if (reason === null) return;
 
     try {
-        const response = await fetch(`/api/cases/${encodeURIComponent(targetCaseId)}/reject`, {
+        const response = await apiFetch(`/api/cases/${encodeURIComponent(targetCaseId)}/reject`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -385,7 +458,7 @@ async function executeRebook(caseId) {
     }
 
     try {
-        const response = await fetch(`/api/cases/${encodeURIComponent(targetCaseId)}/rebook`, {
+        const response = await apiFetch(`/api/cases/${encodeURIComponent(targetCaseId)}/rebook`, {
             method: "POST"
         });
 
@@ -638,7 +711,7 @@ async function fetchPaymentDetails(caseId) {
     const cardEl = document.getElementById("vcc-treasury-card");
     if (!cardEl) return;
     try {
-        const res = await fetch(`/api/payments/case/${encodeURIComponent(caseId)}`);
+        const res = await apiFetch(`/api/payments/case/${encodeURIComponent(caseId)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.hasVirtualCard && data.virtualCard) {
@@ -679,7 +752,7 @@ async function fetchPaymentDetails(caseId) {
 
 async function fetchAudit(caseId) {
     try {
-        const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/audit`);
+        const response = await apiFetch(`/api/cases/${encodeURIComponent(caseId)}/audit`);
         if (!response.ok) return;
         const events = await response.json();
         renderAudit(events);
@@ -690,7 +763,7 @@ async function fetchAudit(caseId) {
 
 async function fetchMessages(caseId) {
     try {
-        const response = await fetch(`/api/cases/${encodeURIComponent(caseId)}/messages`);
+        const response = await apiFetch(`/api/cases/${encodeURIComponent(caseId)}/messages`);
         if (!response.ok) return;
         const messages = await response.json();
         renderMessages(messages);
@@ -978,7 +1051,7 @@ async function submitPassengerChatInput(customText, customButtonId) {
     }
 
     try {
-        const response = await fetch("/api/whatsapp/simulate-incoming", {
+        const response = await apiFetch("/api/whatsapp/simulate-incoming", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -990,7 +1063,7 @@ async function submitPassengerChatInput(customText, customButtonId) {
 
         // Also save text message to history
         if (text) {
-            await fetch(`/api/cases/${encodeURIComponent(caseId)}/messages`, {
+            await apiFetch(`/api/cases/${encodeURIComponent(caseId)}/messages`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ sender: "PASSENGER", text: text })
@@ -1387,7 +1460,7 @@ async function submitIngestPnr(e) {
     }
 
     try {
-        const res = await fetch("/api/ingest/pnr", {
+        const res = await apiFetch("/api/ingest/pnr", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ rawText: rawText, source: source })
@@ -1450,7 +1523,7 @@ async function submitRadarAlert(e) {
     }
 
     try {
-        const res = await fetch("/api/alerts/flight-status", {
+        const res = await apiFetch("/api/alerts/flight-status", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1500,7 +1573,7 @@ async function submitCustomBooking(e) {
     const hotel = document.getElementById("cust-hotel").value.trim() || "None";
 
     try {
-        const res = await fetch("/api/bookings", {
+        const res = await apiFetch("/api/bookings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1526,7 +1599,7 @@ async function submitCustomBooking(e) {
 async function deleteBookingPrompt(id) {
     if (!confirm(`Delete booking ${id}?`)) return;
     try {
-        await fetch(`/api/bookings/${encodeURIComponent(id)}`, { method: "DELETE" });
+        await apiFetch(`/api/bookings/${encodeURIComponent(id)}`, { method: "DELETE" });
         await fetchBookings();
     } catch (err) {
         alert("Error deleting booking: " + err.message);
@@ -1536,7 +1609,7 @@ async function deleteBookingPrompt(id) {
 async function clearAllBookingsPrompt() {
     if (!confirm("Clear all bookings from the database? This lets you test with ONLY your own data.")) return;
     try {
-        await fetch("/api/bookings", { method: "DELETE" });
+        await apiFetch("/api/bookings", { method: "DELETE" });
         await fetchBookings();
     } catch (err) {
         alert("Error clearing bookings: " + err.message);
@@ -1545,7 +1618,7 @@ async function clearAllBookingsPrompt() {
 
 async function resetSeedBookingsPrompt(silent = false) {
     try {
-        const res = await fetch("/api/bookings/reset", { method: "POST" });
+        const res = await apiFetch("/api/bookings/reset", { method: "POST" });
         if (!res.ok) {
             if (!silent) alert("Reset seed bookings is disabled in production.");
             return;
@@ -1557,18 +1630,19 @@ async function resetSeedBookingsPrompt(silent = false) {
 }
 
 async function loadScenarioTemplate(type) {
+    console.log(`[Flyo Demo] Loading adoptive scenario: ${type}`);
     if (type === 'hero') {
-        await fetch("/mock-airline/toggle-break?broken=false", { method: "POST" });
+        await apiFetch("/mock-airline/toggle-break?broken=false", { method: "POST" });
         await checkMockPortalStatus();
         await resetSeedBookingsPrompt(true);
         await simulateCancellation('B1');
     } else if (type === 'domestic') {
-        await fetch("/mock-airline/toggle-break?broken=false", { method: "POST" });
+        await apiFetch("/mock-airline/toggle-break?broken=false", { method: "POST" });
         await checkMockPortalStatus();
         await resetSeedBookingsPrompt(true);
         await simulateCancellation('B2');
     } else if (type === 'failover') {
-        await fetch("/mock-airline/toggle-break?broken=true", { method: "POST" });
+        await apiFetch("/mock-airline/toggle-break?broken=true", { method: "POST" });
         await checkMockPortalStatus();
         await resetSeedBookingsPrompt(true);
         await simulateCancellation('B1');
@@ -1594,7 +1668,7 @@ async function fetchWhatsAppOperatorChat(silent = false) {
     if (!feed) return;
 
     try {
-        const response = await fetch("/api/whatsapp/messages");
+        const response = await apiFetch("/api/whatsapp/messages");
         if (!response.ok) return;
         const messages = await response.json();
 
@@ -1680,6 +1754,10 @@ function detectOtpInChat(messages) {
         if (otpMatch && input && (text.includes("OTP") || text.includes("Security") || text.includes("code") || text.includes("authorization"))) {
             input.placeholder = `Enter OTP ${otpMatch[1]} or tap button...`;
         }
+        const otpInputCode = document.getElementById("otp-input-code");
+        if (otpMatch && otpInputCode && !otpInputCode.value) {
+            otpInputCode.value = otpMatch[1];
+        }
     }
 }
 
@@ -1696,7 +1774,7 @@ async function sendWhatsAppOperatorCommand(command, buttonId = null, senderPhone
             buttonId: buttonId
         };
 
-        const response = await fetch("/api/whatsapp/simulate-incoming", {
+        const response = await apiFetch("/api/whatsapp/simulate-incoming", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
@@ -1738,10 +1816,6 @@ async function sendWhatsAppOperatorCommand(command, buttonId = null, senderPhone
     }
 }
 
-function handleWhatsAppButtonClick(buttonId) {
-    sendWhatsAppOperatorCommand(null, buttonId);
-}
-
 function submitChatInput() {
     const input = document.getElementById("wa-chat-input");
     if (!input || !input.value.trim()) return;
@@ -1770,7 +1844,7 @@ async function requestSecurityOtp() {
 
     try {
         const targetCaseId = currentActiveCase ? currentActiveCase.id : "C1";
-        const response = await fetch(`/api/whatsapp/otp/request?caseId=${encodeURIComponent(targetCaseId)}`, { method: "POST" });
+        const response = await apiFetch(`/api/whatsapp/otp/request?caseId=${encodeURIComponent(targetCaseId)}`, { method: "POST" });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         if (feedback) {
@@ -1810,7 +1884,7 @@ async function verifySecurityOtp() {
     }
 
     try {
-        const response = await fetch("/api/whatsapp/otp/verify", {
+        const response = await apiFetch("/api/whatsapp/otp/verify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1855,7 +1929,7 @@ function handleOtpInputKey(event) {
 
 async function fetchOtpStatus() {
     try {
-        const response = await fetch("/api/whatsapp/otp/status");
+        const response = await apiFetch("/api/whatsapp/otp/status");
         if (!response.ok) return;
         const data = await response.json();
         const feedback = document.getElementById("otp-status-feedback");
@@ -1875,7 +1949,7 @@ async function fetchOtpStatus() {
 
 async function toggleMockPortal() {
     try {
-        const response = await fetch("/mock-airline/toggle-break", { method: "POST" });
+        const response = await apiFetch("/mock-airline/toggle-break", { method: "POST" });
         if (!response.ok) return;
         const data = await response.json();
         updatePortalStatusUI(data.broken);
@@ -1890,7 +1964,7 @@ async function checkMockPortalStatus() {
     const label = document.getElementById("portal-status-label");
     const btn = document.getElementById("toggle-portal-btn");
     try {
-        const response = await fetch("/mock-airline/break-status");
+        const response = await apiFetch("/mock-airline/break-status");
         if (response.status === 404 || !response.ok) {
             if (indicator) {
                 indicator.style.backgroundColor = "#10b981";
@@ -1944,7 +2018,7 @@ function escapeHtml(str) {
 
 async function fetchMonitoringData(silent = false) {
     try {
-        const resp = await fetch("/api/intelligence/monitoring/summary");
+        const resp = await apiFetch("/api/intelligence/monitoring/summary");
         if (!resp.ok) {
             throw new Error(`HTTP error! status: ${resp.status}`);
         }
@@ -2184,7 +2258,7 @@ async function submitLivePrediction(event) {
             departureDate
         });
 
-        const resp = await fetch(`/api/intelligence/predict?${queryParams.toString()}`);
+        const resp = await apiFetch(`/api/intelligence/predict?${queryParams.toString()}`);
         const elapsed = (performance.now() - startTime).toFixed(1);
         latencyEl.textContent = `Completed in ${elapsed} ms`;
 
@@ -2306,7 +2380,7 @@ async function fetchPredictiveLeaderboard() {
     const tbody = document.getElementById("ops-leaderboard-tbody");
     if (!tbody) return;
     try {
-        const res = await fetch("/api/intelligence/monitoring/leaderboard");
+        const res = await apiFetch("/api/intelligence/monitoring/leaderboard");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const items = json.data && json.data.leaderboard ? json.data.leaderboard : (json.leaderboard || []);
@@ -2361,7 +2435,7 @@ async function fetchAirportHeatmap() {
     const grid = document.getElementById("ops-heatmap-grid");
     if (!grid) return;
     try {
-        const res = await fetch("/api/intelligence/monitoring/heatmap");
+        const res = await apiFetch("/api/intelligence/monitoring/heatmap");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const hubs = json.data && json.data.hubs ? json.data.hubs : (json.hubs || []);
@@ -2402,7 +2476,7 @@ async function fetchConnectionRiskQueue() {
     const tbody = document.getElementById("ops-connections-tbody");
     if (!tbody) return;
     try {
-        const res = await fetch("/api/intelligence/monitoring/connection-risks");
+        const res = await apiFetch("/api/intelligence/monitoring/connection-risks");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const connections = await res.json();
 
@@ -2482,7 +2556,7 @@ async function submitGroundTruthOutcome(event) {
             source_feed: "BTS Post-Flight Archive / Ground Radar"
         };
 
-        const resp = await fetch("http://127.0.0.1:8000/monitoring/outcomes/ingest", {
+        const resp = await apiFetch("http://127.0.0.1:8000/monitoring/outcomes/ingest", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

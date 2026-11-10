@@ -17,7 +17,7 @@ import java.util.List;
  * Strictly disabled in production profiles (!prod) and gated by flyo.seeding.enabled.
  */
 @Component
-@Profile({"dev", "demo", "test"})
+@Profile("!prod")
 @ConditionalOnProperty(name = "flyo.seeding.enabled", havingValue = "true", matchIfMissing = false)
 public class FlyoDataSeeder implements CommandLineRunner {
 

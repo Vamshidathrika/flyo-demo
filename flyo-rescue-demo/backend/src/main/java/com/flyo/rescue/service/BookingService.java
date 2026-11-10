@@ -21,11 +21,17 @@ public class BookingService {
     private static final Logger log = LoggerFactory.getLogger(BookingService.class);
 
     private final BookingRepository bookingRepository;
+    private final com.flyo.rescue.repository.RescueCaseRepository caseRepository;
+    private final com.flyo.rescue.repository.RebookOptionRepository optionRepository;
     private final org.springframework.core.env.Environment environment;
 
     public BookingService(BookingRepository bookingRepository,
+                          @org.springframework.context.annotation.Lazy com.flyo.rescue.repository.RescueCaseRepository caseRepository,
+                          @org.springframework.context.annotation.Lazy com.flyo.rescue.repository.RebookOptionRepository optionRepository,
                           org.springframework.core.env.Environment environment) {
         this.bookingRepository = bookingRepository;
+        this.caseRepository = caseRepository;
+        this.optionRepository = optionRepository;
         this.environment = environment;
     }
 
@@ -102,6 +108,12 @@ public class BookingService {
         if (environment != null && environment.matchesProfiles("prod")) {
             throw new UnsupportedOperationException("Production data clear is strictly prohibited.");
         }
+        if (optionRepository != null) {
+            optionRepository.deleteAll();
+        }
+        if (caseRepository != null) {
+            caseRepository.deleteAll();
+        }
         if (isGlobalAdmin()) {
             bookingRepository.deleteAll();
         } else {
@@ -115,6 +127,12 @@ public class BookingService {
     public List<Booking> resetSeedBookings() {
         if (environment != null && environment.matchesProfiles("prod")) {
             throw new UnsupportedOperationException("Production seed reset is strictly prohibited.");
+        }
+        if (optionRepository != null) {
+            optionRepository.deleteAll();
+        }
+        if (caseRepository != null) {
+            caseRepository.deleteAll();
         }
         String currentTenant = TenantContext.getTenantId();
         if (isGlobalAdmin()) {

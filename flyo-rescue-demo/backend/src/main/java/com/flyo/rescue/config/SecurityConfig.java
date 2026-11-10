@@ -143,7 +143,8 @@ public class SecurityConfig {
                         "/h2-console/**",
                         "/v3/api-docs/**",
                         "/swagger-ui/**",
-                        "/swagger-ui.html"
+                        "/swagger-ui.html",
+                        "/api/whatsapp/**"
                     ).permitAll();
                 }
 
