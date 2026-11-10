@@ -111,16 +111,26 @@ async function runWorker() {
                 if (!screenshots.includes(step2Screenshot)) screenshots.push(step2Screenshot);
 
                 // Step 3: Select Approved Flight Option (e.g. FL301, FL101)
+                // Strict validation: Never substitute or fall back to an unapproved flight option
                 let selectBtn = page.getByRole("button", { name: `Select ${config.flight}` });
                 if (await selectBtn.count() === 0) {
-                    const fallbackBtn = page.locator("button.btn-airline-select");
-                    if (await fallbackBtn.count() > 0) {
-                        selectBtn = fallbackBtn.first();
+                    // Try case-insensitive or exact button ID
+                    const idBtn = page.locator(`#select-${config.flight.toLowerCase()}-btn`);
+                    if (await idBtn.count() > 0) {
+                        selectBtn = idBtn;
+                    } else {
+                        throw new Error(`Flight selection mismatch: required flight '${config.flight}' not found on carrier options page. Unapproved flight substitution blocked.`);
                     }
                 }
                 await selectBtn.click();
                 await page.waitForURL("**/mock-airline/confirm*");
                 steps.push(`Selected approved flight option ${config.flight}`);
+
+                // Authoritative check on review page: verify that displayed flight matches selected option
+                const displayFlight = await page.locator("#display-flight").innerText().catch(() => "");
+                if (displayFlight && !displayFlight.includes(config.flight)) {
+                    throw new Error(`Carrier flight substitution detected: requested '${config.flight}' but confirmation page displayed '${displayFlight}'. Transaction aborted.`);
+                }
 
                 const step3Screenshot = path.join(screenshotsDir, `case-${config.caseId}-step-3-confirm.png`);
                 await page.screenshot({ path: step3Screenshot });

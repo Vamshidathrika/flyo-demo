@@ -137,6 +137,14 @@ public class CaseController {
         return ResponseEntity.ok(updated);
     }
 
+    @PostMapping("/{id}/reconcile")
+    public ResponseEntity<RescueCase> reconcileCase(
+            @PathVariable String id,
+            @RequestParam(defaultValue = "Flyo Operator") String operator) {
+        RescueCase reconciled = caseService.reconcileCase(id, operator);
+        return ResponseEntity.ok(reconciled);
+    }
+
     @GetMapping("/{id}/audit")
     public ResponseEntity<List<AuditEvent>> getCaseAudit(@PathVariable String id) {
         return ResponseEntity.ok(auditService.getEventsForCase(id));
@@ -160,7 +168,7 @@ public class CaseController {
 
         String lower = text.toLowerCase();
         RescueCase c = caseService.getCaseById(id).orElse(null);
-        String pnr = (c != null && c.getNewPnr() != null) ? c.getNewPnr() : "R7X2K9";
+        String pnr = (c != null && c.getNewPnr() != null && !c.getNewPnr().isBlank()) ? c.getNewPnr() : "PENDING_CONFIRMATION";
         String paxName = (c != null && c.getPassengerName() != null) ? c.getPassengerName() : "Passenger";
         String paxPhone = (c != null && c.getPassengerPhone() != null) ? c.getPassengerPhone() : "+91 98765 43210";
         String route = (c != null && c.getCancelledSegment() != null) ? c.getCancelledSegment() : "Disrupted Flight Route";
@@ -172,7 +180,7 @@ public class CaseController {
             messageService.sendPassengerConfirmedTicket(
                     id,
                     paxName,
-                    (c != null && c.getFlight() != null) ? c.getFlight() : "FL301",
+                    (c != null && c.getFlight() != null) ? c.getFlight() : "REBOOK_PENDING",
                     pnr,
                     route,
                     "Confirmed Schedule",

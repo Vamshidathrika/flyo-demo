@@ -6,6 +6,7 @@ import com.flyo.rescue.model.AuditEvent;
 import com.flyo.rescue.model.Booking;
 import com.flyo.rescue.model.RebookOption;
 import com.flyo.rescue.model.RescueCase;
+import com.flyo.rescue.model.SimulatedMessage;
 import com.flyo.rescue.repository.BookingRepository;
 import com.flyo.rescue.repository.RescueCaseRepository;
 import org.slf4j.Logger;
@@ -36,6 +37,7 @@ public class WhatsAppCommandService {
     private final com.flyo.rescue.repository.RebookOptionRepository optionRepository;
     private final PaymentSettlementService paymentSettlementService;
     private final MessageService messageService;
+    private final PassengerRescueWorkflowService passengerRescueWorkflowService;
 
     // Track active case per sender phone for conversational context
     private final Map<String, String> lastActiveCaseByPhone = new ConcurrentHashMap<>();
@@ -54,7 +56,8 @@ public class WhatsAppCommandService {
                                   RescueCaseRepository caseRepository,
                                   com.flyo.rescue.repository.RebookOptionRepository optionRepository,
                                   PaymentSettlementService paymentSettlementService,
-                                  MessageService messageService) {
+                                  MessageService messageService,
+                                  @org.springframework.context.annotation.Lazy PassengerRescueWorkflowService passengerRescueWorkflowService) {
         this.caseService = caseService;
         this.bookingService = bookingService;
         this.config = config;
@@ -67,6 +70,7 @@ public class WhatsAppCommandService {
         this.optionRepository = optionRepository;
         this.paymentSettlementService = paymentSettlementService;
         this.messageService = messageService;
+        this.passengerRescueWorkflowService = passengerRescueWorkflowService;
 
         // Pre-authenticate default operator phone for seamless local dashboard operations
         if (config.getOperatorPhone() != null && !config.getOperatorPhone().isBlank()) {
@@ -172,6 +176,11 @@ public class WhatsAppCommandService {
         // 6. STATUS / LIST
         if (command.equals("STATUS") || command.equals("LIST") || command.equals("BOOKINGS")) {
             return sendBookingsStatus(senderPhone);
+        }
+
+        if (command.startsWith("STATUS ") || command.startsWith("LIST ") || command.matches("^B[0-9]+$") || command.startsWith("BOOKING_")) {
+            String bookingId = extractBookingId(command, "B1");
+            return sendSingleBookingStatus(senderPhone, bookingId);
         }
 
         // Quick Button Shortcuts for Dashboard Funnel
@@ -394,6 +403,26 @@ public class WhatsAppCommandService {
         return text;
     }
 
+    private String sendSingleBookingStatus(String senderPhone, String bookingId) {
+        Booking b = bookingRepository.findById(bookingId).orElse(null);
+        if (b == null) {
+            String notFound = String.format("Booking *%s* not found in active records. Reply *STATUS* to view all bookings.", bookingId);
+            whatsAppClient.sendTextMessage(senderPhone, notFound);
+            return notFound;
+        }
+        StringBuilder sb = new StringBuilder("• *").append(b.getId()).append("* — ").append(b.getPassengerName())
+                .append(" (").append(b.getPnr()).append(")\n")
+                .append("   Route: ").append(b.getRoute()).append(" [").append(b.getFlight()).append("]\n")
+                .append("   Status: *").append(b.getStatus()).append("*");
+        if (b.getOnwardFlight() != null && !b.getOnwardFlight().equalsIgnoreCase("None")) {
+            sb.append(" [Onward: ").append(b.getOnwardFlight()).append("]");
+        }
+        sb.append("\n\nReply *DISRUPT ").append(b.getId()).append("* to trigger autonomous rescue simulation.");
+        String text = sb.toString();
+        whatsAppClient.sendTextMessage(senderPhone, text);
+        return text;
+    }
+
     private String handleConversationalBooking(String senderPhone, String rawCommand) {
         String[] tokens = rawCommand.trim().split("\\s+");
         String origin = "HYD";
@@ -569,6 +598,12 @@ public class WhatsAppCommandService {
     }
 
     private String handleDisruptionSimulation(String senderPhone, String bookingId) {
+        Booking booking = bookingRepository.findById(bookingId).orElse(null);
+        if (booking == null) {
+            String notFound = String.format("Booking *%s* not found in active records. Reply *STATUS* to inspect monitored bookings.", bookingId);
+            whatsAppClient.sendTextMessage(senderPhone, notFound);
+            return notFound;
+        }
         RescueCase c = caseService.simulateCancellation(bookingId, "CANCELLED");
         lastActiveCaseByPhone.put(senderPhone, c.getId());
         caseService.generateAndRankOptions(c.getId());
@@ -578,17 +613,23 @@ public class WhatsAppCommandService {
 
     public String handleRequestOtp(String senderPhone, String caseId, String optionId) {
         String targetCase = (caseId != null && !caseId.isBlank()) ? caseId : "C1";
+        RescueCase c = caseRepository.findById(targetCase).orElse(null);
+        String passengerName = c != null ? c.getPassengerName() : "Passenger";
+        RebookOption opt = optionRepository.findById(optionId).orElse(null);
+        int fare = opt != null ? opt.getExtraCost() : 0;
+        String fareStr = fare > 0 ? ("+₹" + String.format("%,d", fare)) : "₹0";
+
         WhatsAppOtpService.OtpChallenge challenge = otpService.createOtpChallenge(senderPhone, targetCase, optionId);
 
         String otpMessage = String.format("""
                 *[Flyo Security Verification Required]*
-                A financial ticket reissue of +₹4,200 has been requested for passenger Ananya Sharma (Option %s).
+                A financial ticket reissue of %s has been requested for passenger %s (Option %s).
 
                 Your single-use security authorization code is:
                 *%s*
 
                 Reply *%s* or tap below to authenticate and unlock rebooking:
-                """, optionId, challenge.code(), challenge.code());
+                """, fareStr, passengerName, optionId, challenge.code(), challenge.code());
 
         List<Map<String, String>> buttons = List.of(
                 Map.of("id", "VERIFY_OTP_" + challenge.code(), "title", "Approve (" + challenge.code() + ")"),
@@ -647,7 +688,7 @@ public class WhatsAppCommandService {
                     • *Confirmed Flight:* FL301 (HYD → BOM → DEL) | PNR: *%s*
                     • *Transit:* Toronto (YYZ) connection secured (7h 50m buffer)
                     • *Notification:* Passenger %s notified
-                    """, rescued.getNewPnr() != null ? rescued.getNewPnr() : "R7X2K9", rescued.getPassengerName());
+                    """, (rescued.getNewPnr() != null && !rescued.getNewPnr().isBlank()) ? rescued.getNewPnr() : "CONFIRMED_PNR", rescued.getPassengerName());
 
             List<Map<String, String>> buttons = List.of(
                     Map.of("id", "AUDIT", "title", "View Audit Trail"),
@@ -965,6 +1006,9 @@ public class WhatsAppCommandService {
                 return true;
             }
         }
+        if (caseRepository != null && caseRepository.findAll().stream().anyMatch(c -> clean.equals(cleanPhone(c.getPassengerPhone())))) {
+            return true;
+        }
         return clean.endsWith("9876543211") || clean.endsWith("9876543212");
     }
 
@@ -978,54 +1022,76 @@ public class WhatsAppCommandService {
         String cmd = rawCommand != null ? rawCommand.trim().toUpperCase() : "";
         log.info("[Passenger WhatsApp Ingress] Sender: {}, Command: {}", senderPhone, cmd);
 
-        String caseId = lastActiveCaseByPhone.values().stream().findFirst().orElse("C1");
+        String clean = cleanPhone(senderPhone);
+        Optional<RescueCase> activeCaseOpt = caseRepository.findAll().stream()
+                .filter(c -> clean.equals(cleanPhone(c.getPassengerPhone())))
+                .reduce((first, second) -> second);
+        String caseId = activeCaseOpt.map(RescueCase::getId)
+                .orElseGet(() -> lastActiveCaseByPhone.values().stream().findFirst().orElse("C1"));
+
         messageService.sendCustomMessage(caseId, "PASSENGER", "Flyo Support", rawCommand != null ? rawCommand : "");
 
-        if (cmd.equals("PAX_BAGGAGE_INFO") || cmd.contains("BAGGAGE") || cmd.contains("LUGGAGE") || cmd.contains("BAG") || cmd.contains("TRANSIT")) {
+        if (cmd.equals("PAX_BAGGAGE_INFO") || cmd.contains("BAGGAGE") || cmd.contains("LUGGAGE")) {
             return handlePassengerBaggageRequest(senderPhone);
         }
 
-        if (cmd.equals("PAX_STATUS") || cmd.equals("STATUS") || cmd.equals("TICKET") || cmd.equals("FLIGHT") || cmd.equals("BOARDING PASS")) {
+        if (cmd.equals("PAX_STATUS") || cmd.equals("STATUS") || cmd.equals("FLIGHT") || cmd.equals("TICKET") || cmd.equals("BOARDING PASS")) {
             return handlePassengerStatusRequest(senderPhone);
         }
 
-        // Welcome / General Concierge Message
-        String welcome = "✈️ *Sri Sai Travels · Priority Passenger Concierge*\n\n" +
-                "Hello Ananya! We are actively tracking your journey.\n" +
-                "Our operations team is monitoring your connection to Toronto (YYZ).\n\n" +
-                "Tap an option below for instant automated guidance:";
+        if (cmd.equals("HI") || cmd.equals("HELLO") || cmd.equals("PAX_HELP") || cmd.contains("CONCIERGE")) {
+            RescueCase currentCase = activeCaseOpt.orElseGet(() -> caseRepository.findById(caseId).orElse(null));
+            String passengerGreeting = currentCase != null && currentCase.getPassengerName() != null
+                    ? (" " + currentCase.getPassengerName())
+                    : "";
+            String onwardContext = (currentCase != null && currentCase.getMissedConnection() != null && !currentCase.getMissedConnection().equalsIgnoreCase("None"))
+                    ? "Our operations team is actively tracking your journey and onward connection.\n\n"
+                    : "Our operations team is actively monitoring your travel itinerary.\n\n";
 
-        messageService.sendCustomMessage(caseId, "SENT_SIMULATED", "Ananya Sharma (+91 98765 43210)", welcome);
+            String welcome = "✈️ *Flyo · Priority Passenger Concierge*\n\n" +
+                    "Hello" + passengerGreeting + "! We are actively tracking your journey.\n" +
+                    onwardContext +
+                    "Tap an option below for instant automated guidance:";
 
-        List<Map<String, String>> buttons = List.of(
-                Map.of("id", "PAX_BAGGAGE_INFO", "title", "🧳 Luggage Info"),
-                Map.of("id", "PAX_STATUS", "title", "✈️ Flight Status"),
-                Map.of("id", "PAX_HELP", "title", "📞 Call Desk")
-        );
-        whatsAppClient.sendInteractiveButtons(senderPhone, welcome, buttons);
-        return welcome;
+            messageService.sendCustomMessage(caseId, "SENT_SIMULATED", "Flyo Passenger Concierge", welcome);
+
+            List<Map<String, String>> buttons = List.of(
+                    Map.of("id", "PAX_BAGGAGE_INFO", "title", "🧳 Luggage Info"),
+                    Map.of("id", "PAX_STATUS", "title", "✈️ Flight Status"),
+                    Map.of("id", "PAX_HELP", "title", "📞 Call Desk")
+            );
+            whatsAppClient.sendInteractiveButtons(senderPhone, welcome, buttons);
+            return welcome;
+        }
+
+        // Delegate to PassengerRescueWorkflowService for authoritative workflow processing
+        return passengerRescueWorkflowService.processPassengerInbound(senderPhone, rawCommand, null);
     }
 
     public String handlePassengerBaggageRequest(String senderPhone) {
-        String caseId = lastActiveCaseByPhone.values().stream().findFirst().orElse("C1");
-        RescueCase c = caseRepository.findById(caseId).orElse(null);
-        String pnr = (c != null && c.getNewPnr() != null) ? c.getNewPnr() : "R7X2K9";
-        String paxName = (c != null && c.getPassengerName() != null) ? c.getPassengerName() : "Ananya Sharma";
+        String clean = cleanPhone(senderPhone);
+        Optional<RescueCase> activeCaseOpt = caseRepository.findAll().stream()
+                .filter(c -> clean.equals(cleanPhone(c.getPassengerPhone())))
+                .reduce((first, second) -> second);
 
-        messageService.sendLuggageTransitGuide(caseId, paxName, pnr);
+        String caseId = activeCaseOpt.map(RescueCase::getId)
+                .orElseGet(() -> lastActiveCaseByPhone.values().stream().findFirst().orElse("C1"));
+        RescueCase c = activeCaseOpt.orElseGet(() -> caseRepository.findById(caseId).orElse(null));
 
-        String guide = String.format(
-                "🧳 *Transit & Baggage Transfer Guide for Ananya*\n\n" +
-                "Here is how your transit works tonight:\n\n" +
-                "1. *Check-in at Hyderabad (HYD):*\n" +
-                "   Show PNR *%s* at the StarSky check-in counter. Your bags will be **through-checked directly to Delhi (DEL)**.\n\n" +
-                "2. *Mumbai (BOM) 45-Minute Transit:*\n" +
-                "   You will stay airside at Terminal 2. Follow the purple \"Domestic Transfers\" signs to Gate 42. You do *not* need to collect your luggage.\n\n" +
-                "3. *Delhi (DEL) Transfer to International:*\n" +
-                "   You arrive at Terminal 3 at 01:40 AM. Your Toronto flight (AC-043) departs from the same terminal (T3) at 09:30 AM.\n\n" +
-                "Need anything else? Reply directly to this chat and your dedicated travel manager will assist you immediately.",
-                pnr
-        );
+        String pnr = (c != null && c.getNewPnr() != null && !c.getNewPnr().isBlank()) ? c.getNewPnr() : null;
+        String paxName = (c != null && c.getPassengerName() != null) ? c.getPassengerName() : "Passenger";
+
+        String guide;
+        if (pnr != null) {
+            SimulatedMessage sent = messageService.sendLuggageTransitGuide(caseId, paxName, pnr);
+            guide = sent.getText();
+        } else {
+            guide = String.format(
+                    "🧳 *Transit & Baggage Transfer Notice for %s*\n\n" +
+                    "No alternative PNR is currently ticketed. Once your flight recovery is confirmed, bag retagging details will appear here.",
+                    paxName
+            );
+        }
 
         List<Map<String, String>> buttons = List.of(
                 Map.of("id", "PAX_STATUS", "title", "✈️ My Itinerary"),
@@ -1036,35 +1102,48 @@ public class WhatsAppCommandService {
     }
 
     public String handlePassengerStatusRequest(String senderPhone) {
-        String caseId = lastActiveCaseByPhone.values().stream().findFirst().orElse("C1");
-        RescueCase c = caseRepository.findById(caseId).orElse(null);
-        String pnr = (c != null && c.getNewPnr() != null) ? c.getNewPnr() : "R7X2K9";
-        String paxName = (c != null && c.getPassengerName() != null) ? c.getPassengerName() : "Ananya Sharma";
+        String clean = cleanPhone(senderPhone);
+        Optional<RescueCase> activeCaseOpt = caseRepository.findAll().stream()
+                .filter(c -> clean.equals(cleanPhone(c.getPassengerPhone())))
+                .reduce((first, second) -> second);
 
-        messageService.sendPassengerConfirmedTicket(
-                caseId,
-                paxName,
-                "FL301",
-                pnr,
-                "Hyderabad (HYD) → Mumbai (BOM) → Delhi (DEL)",
-                "Tonight at 23:30 (Terminal 1)",
-                "Tomorrow at 01:40 AM (Terminal 3)"
-        );
+        String caseId = activeCaseOpt.map(RescueCase::getId)
+                .orElseGet(() -> lastActiveCaseByPhone.values().stream().findFirst().orElse("C1"));
+        RescueCase c = activeCaseOpt.orElseGet(() -> caseRepository.findById(caseId).orElse(null));
 
-        String statusMsg = String.format(
-                "🟢 *ITINERARY CONFIRMED • YOU ARE READY TO FLY*\n\n" +
-                "Dear Ananya,\n\n" +
-                "Your replacement flight has been confirmed and ticketed! Your international connection to Toronto is 100%% secured.\n\n" +
-                "📋 *Your New Flight Details:*\n" +
-                "• *Flight:* FL301 · StarSky Airlines\n" +
-                "• *Routing:* Hyderabad (HYD) → Mumbai (BOM) → Delhi (DEL)\n" +
-                "• *Departure:* Tonight at 23:30 (Terminal 1)\n" +
-                "• *Delhi Arrival:* Tomorrow at 01:40 AM (Terminal 3)\n" +
-                "• *New Airline PNR:* *%s*\n\n" +
-                "Toronto Connection: 7h 50m buffer before your 09:30 AM departure on AC-043.\n\n" +
-                "Tap below to access your e-boarding pass or view luggage transfer details:",
-                pnr
-        );
+        String pnr = (c != null && c.getNewPnr() != null && !c.getNewPnr().isBlank()) ? c.getNewPnr() : null;
+        String paxName = (c != null && c.getPassengerName() != null) ? c.getPassengerName() : "Passenger";
+
+        String statusMsg;
+        if (pnr != null) {
+            String flight = "Rebooked Flight";
+            if (c.getApprovedOptionId() != null) {
+                RebookOption opt = optionRepository.findById(c.getApprovedOptionId()).orElse(null);
+                if (opt != null) flight = opt.getFlight();
+            }
+
+            statusMsg = String.format(
+                    "✈️ *Flyo · Priority Passenger Concierge*\n\n" +
+                    "🟢 *ITINERARY CONFIRMED • YOU ARE READY TO FLY*\n\n" +
+                    "Dear %s,\n\n" +
+                    "Your replacement flight has been confirmed. Details:\n\n" +
+                    "• *Flight:* %s\n" +
+                    "• *Route:* %s\n" +
+                    "• *Booking Reference (PNR):* *%s*\n\n" +
+                    "Tap below to view baggage transfer guidance or call support:",
+                    paxName, flight, c.getCancelledSegment(), pnr
+            );
+        } else {
+            String currentState = c != null ? c.getState() : "MONITORING";
+            statusMsg = String.format(
+                    "✈️ *Flyo · Priority Passenger Concierge*\n\n" +
+                    "ℹ️ *FLIGHT RECOVERY IN PROGRESS*\n\n" +
+                    "Dear %s,\n\n" +
+                    "Your journey is being monitored (Status: *%s*).\n" +
+                    "No alternative ticket has been issued yet. Reply *HELP* for assistance.",
+                    paxName, currentState
+            );
+        }
 
         List<Map<String, String>> buttons = List.of(
                 Map.of("id", "PAX_BAGGAGE_INFO", "title", "🧳 Luggage Info"),
@@ -1100,6 +1179,11 @@ public class WhatsAppCommandService {
                 if (p.matches("^B[0-9]+$") || p.startsWith("B-")) {
                     return p;
                 }
+            }
+        } else if (parts.length == 1) {
+            String p = parts[0].toUpperCase();
+            if (p.matches("^B[0-9]+$") || p.startsWith("B-")) {
+                return p;
             }
         }
         return defaultId;

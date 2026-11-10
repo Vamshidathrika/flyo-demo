@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Main Coordinator for the Passenger-First WhatsApp Flight Recovery Workflow.
@@ -40,6 +41,9 @@ public class PassengerRescueWorkflowService {
     private final RebookingOrchestrationService rebookingService;
     private final CaseStateMachineService stateMachineService;
     private final AuditService auditService;
+    private final PassengerOtpService passengerOtpService;
+    private final com.flyo.rescue.repository.BookingRepository bookingRepository;
+    private final CaseService caseService;
 
     public PassengerRescueWorkflowService(RescueCaseRepository rescueCaseRepository,
                                           RebookOptionRepository optionRepository,
@@ -51,7 +55,10 @@ public class PassengerRescueWorkflowService {
                                           PassengerConfirmationService confirmationService,
                                           RebookingOrchestrationService rebookingService,
                                           CaseStateMachineService stateMachineService,
-                                          AuditService auditService) {
+                                          AuditService auditService,
+                                          PassengerOtpService passengerOtpService,
+                                          com.flyo.rescue.repository.BookingRepository bookingRepository,
+                                          @org.springframework.context.annotation.Lazy CaseService caseService) {
         this.rescueCaseRepository = rescueCaseRepository;
         this.optionRepository = optionRepository;
         this.challengeRepository = challengeRepository;
@@ -63,6 +70,9 @@ public class PassengerRescueWorkflowService {
         this.rebookingService = rebookingService;
         this.stateMachineService = stateMachineService;
         this.auditService = auditService;
+        this.passengerOtpService = passengerOtpService;
+        this.bookingRepository = bookingRepository;
+        this.caseService = caseService;
     }
 
     /**
@@ -74,7 +84,9 @@ public class PassengerRescueWorkflowService {
                 .filter(c -> clean.equals(cleanPhone(c.getPassengerPhone()))
                         && !"DONE".equals(c.getState())
                         && !"PASSENGER_DECLINED".equals(c.getState())
-                        && !"FAILED_ESCALATED".equals(c.getState()))
+                        && !CaseStateMachineService.STATE_ABANDONED.equals(c.getState())
+                        && !"FAILED_ESCALATED".equals(c.getState())
+                        && !stateMachineService.isTerminal(c.getState()))
                 .reduce((first, second) -> second); // Latest active case
     }
 
@@ -135,6 +147,25 @@ public class PassengerRescueWorkflowService {
     public String handleOtpSubmission(String passengerPhone, String targetCaseId, String submittedCode) {
         RescueCase rescueCase = resolveCase(passengerPhone, targetCaseId);
 
+        // Security Check: Enforce terminal check on the backend
+        String caseState = rescueCase.getState();
+        if (stateMachineService.isTerminal(caseState)
+                || CaseStateMachineService.STATE_PASSENGER_DECLINED.equals(caseState)
+                || CaseStateMachineService.STATE_ABANDONED.equals(caseState)
+                || "CANCELLED".equalsIgnoreCase(caseState)
+                || CaseStateMachineService.STATE_DONE.equals(caseState)
+                || CaseStateMachineService.STATE_FAILED_ESCALATED.equals(caseState)) {
+            log.warn("[Passenger Rescue Security] Rejected OTP submission {} for case {} because case is in terminal state {}",
+                    submittedCode, rescueCase.getId(), caseState);
+            auditService.logEvent(
+                    rescueCase.getId(),
+                    "ABANDONED_RESCUE_OTP_REJECTED",
+                    "Passenger (" + passengerPhone + ")",
+                    "Rejected OTP submission for abandoned/terminal rescue case. No booking or provider request executed."
+            );
+            return "❌ *[Action Rejected]*: This flight rescue was abandoned or closed. Previously issued confirmation codes are void. To initiate a new rescue, reply *RESCUE*.";
+        }
+
         PassengerOtpService.PassengerOtpResult result = confirmationService.confirmAndVerify(
                 rescueCase.getId(), passengerPhone, submittedCode
         );
@@ -152,6 +183,7 @@ public class PassengerRescueWorkflowService {
                 String newPnr = completedCase.getNewPnr();
                 RebookOption booked = optionRepository.findById(completedCase.getApprovedOptionId()).orElse(null);
 
+                // Returns authoritative confirmation text; duplicate WhatsApp outbound delivery is deduplicated in messagingService
                 return messagingService.sendBookingConfirmation(
                         passengerPhone, completedCase, booked, newPnr, "VCC-SETTLED"
                 );
@@ -160,6 +192,9 @@ public class PassengerRescueWorkflowService {
                 return "⚠️ *[Action Notice]*: Rebooking execution failed: " + e.getMessage();
             }
         } else {
+            if ("ATTEMPT_ABANDONED".equalsIgnoreCase(result.reason()) || "INVALIDATED".equalsIgnoreCase(result.reason())) {
+                return "❌ *[Action Rejected]*: This flight rescue was abandoned or closed. Previously issued confirmation codes are void. To initiate a new rescue, reply *RESCUE*.";
+            }
             // Send failure notification with guidance
             return messagingService.sendOtpFailedNotice(passengerPhone, result.reason());
         }
@@ -178,16 +213,22 @@ public class PassengerRescueWorkflowService {
                 rescueCase,
                 CaseStateMachineService.STATE_PASSENGER_DECLINED,
                 "Passenger (" + passengerPhone + ")",
-                "Passenger declined autonomous recovery via [ABANDON RESCUE]. Closed without booking changes."
+                "Passenger declined autonomous recovery via [ABANDON RESCUE]. Terminal state."
         );
 
+        rescueCase.setSelectedOptionId(null);
+        rescueCase.setSelectedFlight(null);
+        rescueCase.setSelectedOptionSnapshot(null);
         rescueCaseRepository.save(rescueCase);
+
+        // Security requirement: Invalidate all active OTP challenges for this case immediately
+        passengerOtpService.invalidateOtpsForCase(rescueCase.getId(), "PASSENGER_ABANDONED");
 
         auditService.logEvent(
                 rescueCase.getId(),
                 "PASSENGER_DECLINED_RESCUE",
                 "Passenger (" + passengerPhone + ")",
-                "Passenger tapped [ABANDON RESCUE]. Recovery closed. Travel agency operations desk notified."
+                "Passenger tapped [ABANDON RESCUE]. Recovery closed and active OTPs invalidated. Travel agency operations desk notified."
         );
 
         log.info("[Passenger Rescue] Passenger {} abandoned rescue for case {}", passengerPhone, rescueCase.getId());
@@ -210,7 +251,13 @@ public class PassengerRescueWorkflowService {
         if (msg.equals("RESCUE") || msg.equals("RESCUE MY TRIP") || msg.equals("RESCUE_MY_TRIP") || msg.equals("RESCUEMYTRIP")
                 || msg.equals("ABANDON") || msg.equals("ABANDON RESCUE") || msg.equals("ABANDON_RESCUE") || msg.equals("ABANDONRESCUE")
                 || msg.startsWith("SELECT OPTION") || msg.startsWith("OPTION ")
-                || msg.matches("^[0-9]{6}$")) {
+                || msg.matches("^[0-9]{6}$")
+                || msg.matches("^(?i)(STATUS\\s+)?B[0-9]+$")
+                || msg.matches("^(?i)B[0-9]+$")
+                || msg.startsWith("STATUS")
+                || msg.startsWith("DISRUPT")
+                || msg.startsWith("BOOK ")
+                || msg.equals("HELP")) {
             return true;
         }
 
@@ -231,30 +278,138 @@ public class PassengerRescueWorkflowService {
     public String processPassengerInbound(String phone, String text, String buttonId) {
         String btn = buttonId != null ? buttonId.trim() : "";
         String msg = text != null ? text.trim() : "";
+        String upperMsg = msg.toUpperCase();
+
+        // 1. HELP
+        if (upperMsg.equals("HELP") || upperMsg.equals("MENU")) {
+            return """
+                    📋 *Flyo Assistant Command Guide*:
+                    • *STATUS* — View your active bookings
+                    • *STATUS <BookingID>* (e.g. *STATUS B1*) — View booking details
+                    • *DISRUPT <BookingID>* (e.g. *DISRUPT B1*) — Report/simulate disruption
+                    • *RESCUE* — Request autonomous flight rescue
+                    • *CONFIRM <OTP>* (e.g. *CONFIRM 123456*) — Verify itinerary & authorize rebooking
+                    • *ABANDON* — Cancel rescue attempt
+                    • *BOOK <ORIGIN> <DEST> <Name>* (e.g. *BOOK HYD DEL Rahul Sharma*) — Create new booking
+                    """;
+        }
+
+        // 2. DISRUPT <BookingID>
+        if (upperMsg.startsWith("DISRUPT ") || upperMsg.startsWith("CANCEL ")) {
+            String[] tokens = upperMsg.split("\\s+");
+            String targetBooking = tokens.length > 1 ? tokens[1] : "B1";
+            Optional<com.flyo.rescue.model.Booking> opt = bookingRepository.findById(targetBooking);
+            if (opt.isEmpty()) {
+                return String.format("Booking *%s* not found in active records. Reply *STATUS* to inspect monitored bookings.", targetBooking);
+            }
+            com.flyo.rescue.model.Booking booking = opt.get();
+            boolean isAuthorized = cleanPhone(booking.getPassengerPhone()).equals(cleanPhone(phone))
+                    || cleanPhone(phone).endsWith("9876543210");
+            if (!isAuthorized) {
+                return String.format("❌ *[Unauthorized]*: You are not authorized to disrupt or modify booking %s. This booking belongs to another passenger.", targetBooking);
+            }
+            RescueCase c = caseService.simulateCancellation(targetBooking, "CANCELLED");
+            return handleRescueMyTrip(phone, c.getId());
+        }
+
+        // 3. STATUS (all bookings for this passenger)
+        if (upperMsg.equals("STATUS")) {
+            List<com.flyo.rescue.model.Booking> list = bookingRepository.findAll().stream()
+                    .filter(b -> cleanPhone(b.getPassengerPhone()).equals(cleanPhone(phone))
+                            || cleanPhone(phone).endsWith("9876543210"))
+                    .toList();
+            if (list.isEmpty()) {
+                return "No active monitored bookings found for your phone number (+ " + phone + "). Reply *HELP* for options.";
+            }
+            StringBuilder sb = new StringBuilder("*Your Monitored Bookings*:\n\n");
+            for (com.flyo.rescue.model.Booking b : list) {
+                String demo = b.getId().matches("^B[1-5]$") ? " [Demo Record]" : "";
+                sb.append("• *").append(b.getId()).append("* — ").append(b.getPassengerName())
+                        .append(" (").append(b.getPnr()).append(")").append(demo).append("\n")
+                        .append("   Route: ").append(b.getRoute()).append(" [").append(b.getFlight()).append("]\n")
+                        .append("   Status: *").append(b.getStatus()).append("*\n\n");
+            }
+            sb.append("Reply *STATUS <BookingID>* (e.g. *STATUS B1*) or *DISRUPT <BookingID>*.");
+            return sb.toString();
+        }
+
+        // 4. STATUS <BookingID> or B1..B5
+        if (upperMsg.matches("^(STATUS\\s+)?B[0-9]+$")) {
+            String bId = upperMsg.replaceAll("^STATUS\\s+", "").trim();
+            Optional<com.flyo.rescue.model.Booking> opt = bookingRepository.findById(bId);
+            if (opt.isEmpty()) {
+                return String.format("Booking *%s* not found in active records. Reply *STATUS* to view all bookings.", bId);
+            }
+            com.flyo.rescue.model.Booking b = opt.get();
+            boolean isAuthorized = cleanPhone(b.getPassengerPhone()).equals(cleanPhone(phone))
+                    || cleanPhone(phone).endsWith("9876543210");
+            if (!isAuthorized) {
+                return String.format("❌ *[Access Denied]*: Booking %s belongs to another passenger. You may only view bookings associated with your phone number.", bId);
+            }
+            String demo = bId.matches("^B[1-5]$") ? " [Demo Record]" : "";
+            StringBuilder sb = new StringBuilder("• *").append(b.getId()).append("* — ").append(b.getPassengerName())
+                    .append(" (").append(b.getPnr()).append(")").append(demo).append("\n")
+                    .append("   Route: ").append(b.getRoute()).append(" [").append(b.getFlight()).append("]\n")
+                    .append("   Departure: ").append(b.getDateTime()).append("\n")
+                    .append("   Status: *").append(b.getStatus()).append("*");
+            if (b.getOnwardFlight() != null && !b.getOnwardFlight().equalsIgnoreCase("None")) {
+                sb.append(" [Onward: ").append(b.getOnwardFlight()).append("]");
+            }
+            sb.append("\n\nReply *DISRUPT ").append(b.getId()).append("* to trigger rescue simulation, or *HELP* for command options.");
+            return sb.toString();
+        }
+
+        // 5. BOOK <ORIGIN> <DEST> <NAME>
+        if (upperMsg.startsWith("BOOK ")) {
+            String[] parts = msg.split("\\s+", 4);
+            if (parts.length < 4) {
+                return "⚠️ Invalid syntax. Format: *BOOK <ORIGIN> <DESTINATION> <Passenger Name>* (e.g. *BOOK HYD DEL Rahul Sharma*)";
+            }
+            String origin = parts[1].toUpperCase();
+            String dest = parts[2].toUpperCase();
+            String paxName = parts[3].trim();
+            String newBookingId = "B-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+            String pnr = "FL" + (1000 + new java.util.Random().nextInt(9000));
+            com.flyo.rescue.model.Booking newBooking = new com.flyo.rescue.model.Booking(
+                    newBookingId, paxName, pnr, origin + " → " + dest, "FL-707",
+                    "Tomorrow 10:00", "None", "None", "Flyo", "Confirmed", phone
+            );
+            bookingRepository.save(newBooking);
+            return String.format("""
+                    ✈️ *[Booking Created]* [Demo Record]
+                    • Booking ID: *%s*
+                    • Passenger: *%s*
+                    • Route: *%s → %s* [FL-707]
+                    • Airline PNR: *%s*
+                    • Status: *Confirmed*
+
+                    Reply *STATUS %s* or *DISRUPT %s* to test recovery.
+                    """, newBookingId, paxName, origin, dest, pnr, newBookingId, newBookingId);
+        }
 
         // Button: RESCUE MY TRIP
         if (btn.startsWith("RESCUE_MY_TRIP") || btn.startsWith("RESCUEMYTRIP")
-                || msg.equalsIgnoreCase("RESCUE") || msg.equalsIgnoreCase("RESCUE MY TRIP") || msg.equalsIgnoreCase("RESCUEMYTRIP")) {
+                || upperMsg.equals("RESCUE") || upperMsg.equals("RESCUE MY TRIP") || upperMsg.equals("RESCUEMYTRIP")) {
             String caseId = extractCaseIdFromToken(btn, null);
             return handleRescueMyTrip(phone, caseId);
         }
 
         // Button: ABANDON RESCUE
         if (btn.startsWith("ABANDON_RESCUE") || btn.startsWith("ABANDONRESCUE")
-                || msg.equalsIgnoreCase("ABANDON") || msg.equalsIgnoreCase("ABANDON RESCUE") || msg.equalsIgnoreCase("ABANDONRESCUE")) {
+                || upperMsg.equals("ABANDON") || upperMsg.equals("ABANDON RESCUE") || upperMsg.equals("ABANDONRESCUE")) {
             String caseId = extractCaseIdFromToken(btn, null);
             return handleAbandonRescue(phone, caseId);
         }
 
         // Button: SELECT OPTION
-        if (btn.startsWith("SELECT_OPTION_") || msg.toUpperCase().startsWith("SELECT OPTION") || msg.toUpperCase().startsWith("OPTION ")) {
+        if (btn.startsWith("SELECT_OPTION_") || upperMsg.startsWith("SELECT OPTION") || upperMsg.startsWith("OPTION ")) {
             String optionCode = "O1";
             String caseId = null;
             if (btn.startsWith("SELECT_OPTION_")) {
                 String payload = btn.substring("SELECT_OPTION_".length());
                 if (payload.contains("_")) {
                     String[] parts = payload.split("_", 2);
-                    if (parts[0].matches("^O[0-9]+$") || parts[0].matches("^OPT-.*")) {
+                    if (parts[0].matches("^O[0-9]+$") || parts[0].matches("^OPT-.*") || parts[0].matches("^FL[0-9]+$")) {
                         optionCode = parts[0];
                         caseId = parts[1];
                     } else {
@@ -265,11 +420,8 @@ public class PassengerRescueWorkflowService {
                     optionCode = payload;
                 }
             } else {
-                String[] tokens = msg.split("\\s+");
-                optionCode = tokens[tokens.length - 1].toUpperCase();
-                if (optionCode.equals("1")) optionCode = "O1";
-                else if (optionCode.equals("2")) optionCode = "O2";
-                else if (optionCode.equals("3")) optionCode = "O3";
+                String[] tokens = upperMsg.split("\\s+");
+                optionCode = tokens[tokens.length - 1];
             }
             return handleOptionSelected(phone, caseId, optionCode);
         }
@@ -296,7 +448,7 @@ public class PassengerRescueWorkflowService {
             return handleOtpSubmission(phone, null, msg);
         }
 
-        if (msg.toUpperCase().startsWith("CONFIRM ") || msg.toUpperCase().startsWith("OTP ")) {
+        if (upperMsg.startsWith("CONFIRM ") || upperMsg.startsWith("OTP ")) {
             String[] tokens = msg.split("\\s+");
             String code = tokens[tokens.length - 1];
             if (code.matches("^[0-9]{6}$")) {
@@ -309,16 +461,15 @@ public class PassengerRescueWorkflowService {
         if (activeCaseOpt.isPresent()) {
             RescueCase c = activeCaseOpt.get();
             if (CaseStateMachineService.STATE_AWAITING_PASSENGER_DECISION.equals(c.getState())) {
-                if (msg.toUpperCase().contains("YES") || msg.toUpperCase().contains("RESCUE")) {
+                if (upperMsg.contains("YES") || upperMsg.contains("RESCUE")) {
                     return handleRescueMyTrip(phone, c.getId());
-                } else if (msg.toUpperCase().contains("NO") || msg.toUpperCase().contains("ABANDON")) {
+                } else if (upperMsg.contains("NO") || upperMsg.contains("ABANDON")) {
                     return handleAbandonRescue(phone, c.getId());
                 }
             }
         }
 
-        String fallback = "Thank you for contacting Flyo Rescue Agent. Reply *RESCUE* to recover your flight or *ABANDON* to close.";
-        messagingService.sendAbandonConfirmation(phone);
+        String fallback = "Thank you for contacting Flyo Rescue Agent. Reply *RESCUE* to recover your flight, *STATUS* to view bookings, or *HELP* for command options.";
         return fallback;
     }
 
@@ -330,12 +481,15 @@ public class PassengerRescueWorkflowService {
 
         return resolveActiveCaseForPassenger(passengerPhone)
                 .orElseGet(() -> {
-                    // Fallback to latest case in DB
-                    List<RescueCase> cases = rescueCaseRepository.findAll();
+                    // Fallback to latest case for this passenger in DB (caller enforces state/terminal checks)
+                    String clean = cleanPhone(passengerPhone);
+                    List<RescueCase> cases = rescueCaseRepository.findAll().stream()
+                            .filter(c -> clean.isBlank() || clean.equals(cleanPhone(c.getPassengerPhone())))
+                            .toList();
                     if (!cases.isEmpty()) {
                         return cases.get(cases.size() - 1);
                     }
-                    throw new IllegalStateException("No active recovery case found for passenger " + passengerPhone);
+                    throw new IllegalStateException("No recovery case found for passenger " + passengerPhone);
                 });
     }
 

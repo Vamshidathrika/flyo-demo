@@ -68,6 +68,10 @@ public class CancellationNotificationService {
         rescueCase.setPassengerPhone(paxPhone);
         rescueCaseRepository.save(rescueCase);
 
+        if (CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
+            return rescueCase;
+        }
+
         // Deduplication: prevent duplicate WhatsApp notifications for same cancellation event
         String dedupKey = bookingId + ":" + booking.getFlight() + ":CANCELLED";
         if (notifiedBookings.add(dedupKey) || "DETECTED".equals(rescueCase.getState())) {

@@ -21,15 +21,18 @@ public class PassengerItineraryService {
     private final RescueCaseRepository rescueCaseRepository;
     private final CaseStateMachineService stateMachineService;
     private final AuditService auditService;
+    private final CanonicalItineraryService canonicalItineraryService;
 
     public PassengerItineraryService(BookingRepository bookingRepository,
                                      RescueCaseRepository rescueCaseRepository,
                                      CaseStateMachineService stateMachineService,
-                                     AuditService auditService) {
+                                     AuditService auditService,
+                                     CanonicalItineraryService canonicalItineraryService) {
         this.bookingRepository = bookingRepository;
         this.rescueCaseRepository = rescueCaseRepository;
         this.stateMachineService = stateMachineService;
         this.auditService = auditService;
+        this.canonicalItineraryService = canonicalItineraryService;
     }
 
     /**
@@ -40,8 +43,26 @@ public class PassengerItineraryService {
         RescueCase rescueCase = rescueCaseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
+        if (CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
+            log.warn("[PassengerItineraryService] Case {} in DATA_RECONCILIATION_REQUIRED. Itinerary fetch blocked.", caseId);
+            return rescueCase;
+        }
+
         Booking booking = bookingRepository.findById(rescueCase.getBookingId())
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + rescueCase.getBookingId()));
+
+        var segments = canonicalItineraryService.normalizeAndPersistSegments(booking);
+        var segOpt = canonicalItineraryService.resolveDisruptedSegment(booking, rescueCase.getFlightNumber(), rescueCase.getOriginAirport(), rescueCase.getDestinationAirport());
+        if (segOpt.isEmpty()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, "Disrupted flight segment not found for booking: " + booking.getId());
+            return rescueCase;
+        }
+
+        var validation = canonicalItineraryService.validateItineraryIntegrity(rescueCase, booking, segOpt.get());
+        if (!validation.isValid()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, validation.mismatchReason());
+            return rescueCase;
+        }
 
         stateMachineService.transition(
                 rescueCase,

@@ -107,8 +107,8 @@ public class MessageService {
                 route != null ? route : "Hyderabad (HYD) → Mumbai (BOM) → Delhi (DEL)",
                 departure != null ? departure : "Tonight at 23:30 (Terminal 1)",
                 arrival != null ? arrival : "Tomorrow at 01:40 AM (Terminal 3)",
-                newPnr != null ? newPnr : "R7X2K9",
-                newPnr != null ? newPnr : "R7X2K9"
+                (newPnr != null && !newPnr.isBlank()) ? newPnr : "CONFIRMED_PNR",
+                (newPnr != null && !newPnr.isBlank()) ? newPnr : "CONFIRMED_PNR"
         );
 
         SimulatedMessage message = new SimulatedMessage(caseId, "PASSENGER_STAGE_2_TICKET", recipient, text);
@@ -128,7 +128,7 @@ public class MessageService {
                 "   You arrive at Terminal 3 at 01:40 AM. Your Toronto flight (AC-043) departs from the same terminal (T3) at 09:30 AM.\n\n" +
                 "Need anything else? Reply directly to this chat and your dedicated travel manager will assist you immediately.",
                 passengerName != null ? passengerName : "Valued Traveller",
-                newPnr != null ? newPnr : "R7X2K9"
+                (newPnr != null && !newPnr.isBlank()) ? newPnr : "CONFIRMED_PNR"
         );
 
         SimulatedMessage message = new SimulatedMessage(caseId, "PASSENGER_STAGE_3_BAGGAGE", recipient, text);

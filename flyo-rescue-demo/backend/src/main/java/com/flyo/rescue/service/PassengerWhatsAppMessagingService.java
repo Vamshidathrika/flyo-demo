@@ -31,11 +31,15 @@ public class PassengerWhatsAppMessagingService {
 
     private final MetaWhatsAppClient whatsAppClient;
     private final MessageService messageService;
+    private final org.springframework.core.env.Environment environment;
+    private final java.util.Set<String> sentConfirmations = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public PassengerWhatsAppMessagingService(MetaWhatsAppClient whatsAppClient,
-                                            MessageService messageService) {
+                                            MessageService messageService,
+                                            org.springframework.core.env.Environment environment) {
         this.whatsAppClient = whatsAppClient;
         this.messageService = messageService;
+        this.environment = environment;
     }
 
     /**
@@ -203,44 +207,86 @@ public class PassengerWhatsAppMessagingService {
                                           String vccRef) {
         int fare = bookedOption != null ? bookedOption.getExtraCost() : 0;
         String fareText = fare > 0 ? ("₹" + String.format("%,d", fare) + " (Corporate payment settled)") : "₹0 (Complimentary recovery — no additional charge)";
-        String flight = bookedOption != null ? bookedOption.getFlight() : "FL301";
-        String route = bookedOption != null ? bookedOption.getRoute() : rescueCase.getCancelledSegment();
+        String flight = bookedOption != null ? bookedOption.getFlight() : (rescueCase != null && rescueCase.getSelectedFlight() != null ? rescueCase.getSelectedFlight() : "FL301");
+        String route = bookedOption != null ? bookedOption.getRoute() : (rescueCase != null ? rescueCase.getCancelledSegment() : "Route");
         String dep = bookedOption != null ? bookedOption.getDeparture() : "Confirmed Schedule";
         String arr = bookedOption != null ? bookedOption.getArrival() : "Confirmed Schedule";
 
-        String text = String.format("""
-                ✈️ *Your flight rescue is confirmed!*
+        boolean isLiveProd = environment != null && environment.matchesProfiles("prod");
+        String provider = environment != null ? environment.getProperty("airline.booking.provider", "SANDBOX").toUpperCase() : "SANDBOX";
+        boolean isSimulated = !isLiveProd || "SANDBOX".equals(provider) || "MOCK".equals(provider) || "SIMULATED".equals(provider);
 
-                Your alternative flight has been successfully booked and ticketed.
+        String text;
+        if (isSimulated) {
+            text = String.format("""
+                    ✈️ *Your flight rescue is confirmed!*
+                    *[SIMULATION / SANDBOX MODE]*
+                    Simulation completed. No real airline booking or ticket was created.
 
-                • Passenger: *%s*
-                • New Flight: *%s*
-                • Route: %s
-                • Departure: %s
-                • Arrival: %s
-                • Airline PNR: *%s*
-                • E-Ticket Status: *ISSUED & VALIDATED*
-                • E-Ticket / Itinerary: http://localhost:8080/mock-airline/itinerary?pnr=%s
-                • Additional Payment: *%s*
-                • Baggage Guidance: Checked luggage automatically transfers. Show this confirmed PNR at check-in / gate.
-                • Boarding Pass: Available upon carrier online check-in (opens 24h prior to departure).
+                    • Passenger: *%s*
+                    • Selected Alternative: *%s*
+                    • Route: %s
+                    • Departure: %s
+                    • Arrival: %s
+                    • Simulated Reference: *%s*
+                    • Ticket Status: *SIMULATION ONLY — NOT A VALID AIRLINE TICKET*
+                    • Mock Itinerary: http://localhost:8080/mock-airline/itinerary?pnr=%s
+                    • Additional Payment: *%s*
+                    • Baggage Guidance: Baggage transfer is NOT guaranteed. Separate airline ticketing applies; baggage must be collected and re-checked at transfer counter unless confirmed through-checked by carrier.
+                    • Boarding Pass: Simulation mode — boarding pass is not available for real travel.
 
-                Thank you for choosing Flyo.
-                """,
-                rescueCase.getPassengerName(),
-                flight,
-                route,
-                dep,
-                arr,
-                verifiedPnr,
-                verifiedPnr,
-                fareText
-        );
+                    Thank you for choosing Flyo.
+                    """,
+                    rescueCase != null ? rescueCase.getPassengerName() : "Passenger",
+                    flight,
+                    route,
+                    dep,
+                    arr,
+                    verifiedPnr,
+                    verifiedPnr,
+                    fareText
+            );
+        } else {
+            text = String.format("""
+                    ✈️ *Your flight rescue is confirmed!*
+                    Authoritative airline order confirmation received.
+
+                    • Passenger: *%s*
+                    • Confirmed Flight: *%s*
+                    • Route: %s
+                    • Departure: %s
+                    • Arrival: %s
+                    • Airline PNR: *%s*
+                    • Provider Order ID: *%s*
+                    • E-Ticket Status: *TICKET_ISSUED*
+                    • Additional Payment: *%s*
+                    • Baggage Guidance: Interline baggage transfer depends on carrier through-check agreement. Confirm through-check status at airport check-in.
+                    • Boarding Pass: Available upon carrier online check-in (opens 24h prior to departure).
+
+                    Thank you for choosing Flyo.
+                    """,
+                    rescueCase != null ? rescueCase.getPassengerName() : "Passenger",
+                    flight,
+                    route,
+                    dep,
+                    arr,
+                    verifiedPnr,
+                    rescueCase != null && rescueCase.getProviderOrderId() != null ? rescueCase.getProviderOrderId() : ("ORD-" + verifiedPnr),
+                    fareText
+            );
+        }
 
         List<Map<String, String>> buttons = List.of(
                 Map.of("id", "STATUS", "title", "Check Status"),
                 Map.of("id", "AUDIT", "title", "View Audit Trail")
         );
+
+        // Idempotency Protection: Deduplicate rapid duplicate dispatches for same case and PNR
+        String dedupeKey = (rescueCase != null ? rescueCase.getId() : "CASE") + "_" + verifiedPnr;
+        if (!sentConfirmations.add(dedupeKey)) {
+            log.info("[Passenger WhatsApp] Suppressed duplicate booking confirmation delivery for dedupeKey {}", dedupeKey);
+            return text;
+        }
 
         whatsAppClient.sendInteractiveButtons(passengerPhone, text, buttons);
         if (rescueCase != null && rescueCase.getId() != null) {

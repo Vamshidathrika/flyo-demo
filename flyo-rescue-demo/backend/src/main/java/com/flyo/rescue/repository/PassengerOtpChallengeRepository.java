@@ -12,11 +12,21 @@ public interface PassengerOtpChallengeRepository extends JpaRepository<Passenger
 
     List<PassengerOtpChallenge> findByCaseIdOrderByCreatedAtDesc(String caseId);
 
+    List<PassengerOtpChallenge> findByCaseIdAndInvalidatedFalse(String caseId);
+
     Optional<PassengerOtpChallenge> findTopByCaseIdAndVerifiedFalseOrderByCreatedAtDesc(String caseId);
+
+    Optional<PassengerOtpChallenge> findTopByCaseIdAndVerifiedFalseAndInvalidatedFalseOrderByCreatedAtDesc(String caseId);
 
     Optional<PassengerOtpChallenge> findTopByPassengerPhoneAndCaseIdAndVerifiedFalseOrderByCreatedAtDesc(
             String passengerPhone, String caseId);
 
+    Optional<PassengerOtpChallenge> findTopByPassengerPhoneAndCaseIdAndVerifiedFalseAndInvalidatedFalseOrderByCreatedAtDesc(
+            String passengerPhone, String caseId);
+
     Optional<PassengerOtpChallenge> findTopByPassengerPhoneAndVerifiedFalseOrderByCreatedAtDesc(
+            String passengerPhone);
+
+    Optional<PassengerOtpChallenge> findTopByPassengerPhoneAndVerifiedFalseAndInvalidatedFalseOrderByCreatedAtDesc(
             String passengerPhone);
 }

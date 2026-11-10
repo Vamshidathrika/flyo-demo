@@ -34,6 +34,7 @@ public class RebookingOrchestrationService {
     private final CaseStateMachineService stateMachineService;
     private final PassengerWhatsAppMessagingService passengerWhatsAppMessagingService;
     private final AuditService auditService;
+    private final CanonicalItineraryService canonicalItineraryService;
 
     public RebookingOrchestrationService(RescueCaseRepository rescueCaseRepository,
                                         RebookOptionRepository optionRepository,
@@ -42,7 +43,8 @@ public class RebookingOrchestrationService {
                                         RebookService rebookService,
                                         CaseStateMachineService stateMachineService,
                                         PassengerWhatsAppMessagingService passengerWhatsAppMessagingService,
-                                        AuditService auditService) {
+                                        AuditService auditService,
+                                        CanonicalItineraryService canonicalItineraryService) {
         this.rescueCaseRepository = rescueCaseRepository;
         this.optionRepository = optionRepository;
         this.bookingRepository = bookingRepository;
@@ -51,6 +53,7 @@ public class RebookingOrchestrationService {
         this.stateMachineService = stateMachineService;
         this.passengerWhatsAppMessagingService = passengerWhatsAppMessagingService;
         this.auditService = auditService;
+        this.canonicalItineraryService = canonicalItineraryService;
     }
 
     /**
@@ -60,6 +63,10 @@ public class RebookingOrchestrationService {
     public RescueCase executeRebookingWorkflow(String caseId, String passengerPhone) {
         RescueCase rescueCase = rescueCaseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        if (CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
+            throw new IllegalStateException("Cannot rebook: case " + caseId + " is in DATA_RECONCILIATION_REQUIRED.");
+        }
 
         String approvedOptionId = rescueCase.getApprovedOptionId() != null
                 ? rescueCase.getApprovedOptionId()
@@ -76,6 +83,38 @@ public class RebookingOrchestrationService {
                                 || approvedOptionId.endsWith("-" + o.getId()))
                         .findFirst()
                         .orElseThrow(() -> new IllegalArgumentException("Option not found: " + approvedOptionId)));
+
+        Booking booking = bookingRepository.findById(rescueCase.getBookingId()).orElse(null);
+        if (booking == null) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, "Underlying booking missing at rebooking time.");
+            throw new IllegalStateException("Cannot rebook: underlying booking missing.");
+        }
+
+        var optVal = canonicalItineraryService.validateOptionRoute(rescueCase, booking, option);
+        if (!optVal.isValid()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, optVal.mismatchReason());
+            auditService.logEvent(caseId, "EXECUTION_IDENTITY_VALIDATION_FAILED", "Flyo Rebook Engine", optVal.mismatchReason());
+            throw new IllegalStateException("Cannot rebook: option route mismatch: " + optVal.mismatchReason());
+        }
+
+        // Stage 13C Strict Flight Consistency Enforcement: verify selected option matches approved option and flight
+        if (rescueCase.getSelectedOptionId() != null
+                && !rescueCase.getSelectedOptionId().equalsIgnoreCase(option.getId())
+                && !rescueCase.getSelectedOptionId().endsWith("-" + option.getId())
+                && !option.getId().endsWith("-" + rescueCase.getSelectedOptionId())) {
+            throw new IllegalStateException(String.format(
+                    "Selected option mismatch: case was selected for %s (%s) but rebooking attempted for %s (%s)",
+                    rescueCase.getSelectedOptionId(), rescueCase.getSelectedFlight(), option.getId(), option.getFlight()
+            ));
+        }
+
+        if (rescueCase.getSelectedFlight() != null && option.getFlight() != null
+                && !rescueCase.getSelectedFlight().equalsIgnoreCase(option.getFlight())) {
+            throw new IllegalStateException(String.format(
+                    "Selected flight mismatch: expected flight %s but option contains %s",
+                    rescueCase.getSelectedFlight(), option.getFlight()
+            ));
+        }
 
         // Idempotency: If already completed with PNR, return immediately
         if ("DONE".equalsIgnoreCase(rescueCase.getState()) && rescueCase.getNewPnr() != null) {
@@ -285,6 +324,8 @@ public class RebookingOrchestrationService {
                     "Flyo Booking Verifier",
                     "Authoritative booking and ticket verified. New PNR " + newPnr + " confirmed."
             );
+            rescueCase.setProviderStatus("MOCK_CONFIRMED");
+            rescueCase.setProviderOrderId("ORD-" + newPnr);
             RescueCase saved = rescueCaseRepository.save(rescueCase);
 
             auditService.logEvent(
@@ -294,17 +335,6 @@ public class RebookingOrchestrationService {
                     String.format("Itinerary successfully rebooked and ticketed. Airline PNR %s confirmed for flight %s.",
                             newPnr, option.getFlight())
             );
-
-            // Send WhatsApp Success Message to Passenger
-            String targetPhone = passengerPhone != null && !passengerPhone.isBlank()
-                    ? passengerPhone
-                    : rescueCase.getPassengerPhone();
-            if (targetPhone != null && !targetPhone.isBlank()) {
-                passengerWhatsAppMessagingService.sendBookingConfirmation(
-                        targetPhone, saved, option, newPnr,
-                        vccOpt.map(VirtualCard::getId).orElse("N/A (₹0 Fare)")
-                );
-            }
 
             log.info("[Rebooking] Successfully completed case {} with PNR {}", caseId, newPnr);
             return saved;

@@ -23,6 +23,13 @@ public class PassengerOtpChallenge {
     private boolean verified;
     private LocalDateTime verifiedAt;
 
+    private String rescueAttemptId;
+    private String tenantId = "tenant_default";
+    private boolean invalidated = false;
+    private LocalDateTime invalidatedAt;
+    private String invalidatedReason;
+    private String permittedAction = "REBOOK_CONFIRMATION";
+
     public PassengerOtpChallenge() {
     }
 
@@ -136,5 +143,53 @@ public class PassengerOtpChallenge {
 
     public void setVerifiedAt(LocalDateTime verifiedAt) {
         this.verifiedAt = verifiedAt;
+    }
+
+    public String getRescueAttemptId() {
+        return rescueAttemptId;
+    }
+
+    public void setRescueAttemptId(String rescueAttemptId) {
+        this.rescueAttemptId = rescueAttemptId;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public boolean isInvalidated() {
+        return invalidated;
+    }
+
+    public void setInvalidated(boolean invalidated) {
+        this.invalidated = invalidated;
+    }
+
+    public LocalDateTime getInvalidatedAt() {
+        return invalidatedAt;
+    }
+
+    public void setInvalidatedAt(LocalDateTime invalidatedAt) {
+        this.invalidatedAt = invalidatedAt;
+    }
+
+    public String getInvalidatedReason() {
+        return invalidatedReason;
+    }
+
+    public void setInvalidatedReason(String invalidatedReason) {
+        this.invalidatedReason = invalidatedReason;
+    }
+
+    public String getPermittedAction() {
+        return permittedAction;
+    }
+
+    public void setPermittedAction(String permittedAction) {
+        this.permittedAction = permittedAction;
     }
 }

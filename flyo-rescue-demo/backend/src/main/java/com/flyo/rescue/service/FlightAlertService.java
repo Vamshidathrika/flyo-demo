@@ -16,15 +16,18 @@ public class FlightAlertService {
     private final CaseService caseService;
     private final AuditService auditService;
     private final AviationRadarClient radarClient;
+    private final CanonicalItineraryService canonicalItineraryService;
 
     public FlightAlertService(BookingRepository bookingRepository,
                               CaseService caseService,
                               AuditService auditService,
-                              AviationRadarClient radarClient) {
+                              AviationRadarClient radarClient,
+                              CanonicalItineraryService canonicalItineraryService) {
         this.bookingRepository = bookingRepository;
         this.caseService = caseService;
         this.auditService = auditService;
         this.radarClient = radarClient;
+        this.canonicalItineraryService = canonicalItineraryService;
     }
 
     /**
@@ -77,9 +80,25 @@ public class FlightAlertService {
         List<Booking> allBookings = bookingRepository.findAll();
         List<Booking> affectedBookings = new ArrayList<>();
 
-        for (Booking booking : allBookings) {
-            if (booking.getFlight() != null && normalizeFlight(booking.getFlight()).equalsIgnoreCase(targetFlight)) {
-                affectedBookings.add(booking);
+        if (alert.getBookingId() != null && !alert.getBookingId().isBlank()) {
+            Booking b = bookingRepository.findById(alert.getBookingId()).orElse(null);
+            if (b != null) {
+                affectedBookings.add(b);
+            }
+        } else {
+            for (Booking booking : allBookings) {
+                if (booking.getFlight() != null && normalizeFlight(booking.getFlight()).equalsIgnoreCase(targetFlight)) {
+                    // Check if route matches when alert specifies airport route
+                    if (alert.getOriginAirport() != null || alert.getDestinationAirport() != null) {
+                        var segOpt = canonicalItineraryService.resolveDisruptedSegment(
+                                booking, alert.getFlight(), alert.getOriginAirport(), alert.getDestinationAirport());
+                        if (segOpt.isEmpty()) {
+                            // Route does not match this passenger's booking - do not falsely disrupt
+                            continue;
+                        }
+                    }
+                    affectedBookings.add(booking);
+                }
             }
         }
 
@@ -95,9 +114,30 @@ public class FlightAlertService {
             // Trigger Disruption Detection
             RescueCase rescueCase = caseService.simulateCancellation(booking.getId(), status);
 
+            // Validate that alert flight and route actually match this booking
+            boolean flightMatches = booking.getFlight() != null && normalizeFlight(booking.getFlight()).equalsIgnoreCase(targetFlight);
+            boolean routeMatches = true;
+            if (alert.getOriginAirport() != null && !alert.getOriginAirport().isBlank()) {
+                routeMatches = alert.getOriginAirport().equalsIgnoreCase(booking.getOriginAirport());
+            }
+            if (routeMatches && alert.getDestinationAirport() != null && !alert.getDestinationAirport().isBlank()) {
+                routeMatches = alert.getDestinationAirport().equalsIgnoreCase(booking.getDestinationAirport());
+            }
+
+            if (!flightMatches || !routeMatches) {
+                String mismatchReason = !flightMatches
+                        ? String.format("Alert flight %s does not match booking %s flight %s.", targetFlight, booking.getId(), booking.getFlight())
+                        : String.format("Flight %s matches but alert route %s -> %s does not match booking %s route %s.",
+                            targetFlight, alert.getOriginAirport(), alert.getDestinationAirport(), booking.getId(), booking.getRoute());
+                canonicalItineraryService.flagReconciliationRequired(rescueCase, mismatchReason);
+                createdCases.add(caseService.getCaseById(rescueCase.getId()).orElse(rescueCase));
+                continue;
+            }
+
             // If case is in flight / reconciling / terminal, do not re-rank options or force state transition
             if ("RECONCILING".equals(rescueCase.getState()) || "DONE".equals(rescueCase.getState())
-                    || "FAILED_ESCALATED".equals(rescueCase.getState()) || "ESCALATED".equals(rescueCase.getState())) {
+                    || "FAILED_ESCALATED".equals(rescueCase.getState()) || "ESCALATED".equals(rescueCase.getState())
+                    || CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
                 createdCases.add(rescueCase);
                 continue;
             }

@@ -21,15 +21,18 @@ public class PassengerOptionSelectionService {
     private final RebookOptionRepository optionRepository;
     private final CaseStateMachineService stateMachineService;
     private final AuditService auditService;
+    private final PassengerOtpService passengerOtpService;
 
     public PassengerOptionSelectionService(RescueCaseRepository rescueCaseRepository,
                                            RebookOptionRepository optionRepository,
                                            CaseStateMachineService stateMachineService,
-                                           AuditService auditService) {
+                                           AuditService auditService,
+                                           PassengerOtpService passengerOtpService) {
         this.rescueCaseRepository = rescueCaseRepository;
         this.optionRepository = optionRepository;
         this.stateMachineService = stateMachineService;
         this.auditService = auditService;
+        this.passengerOtpService = passengerOtpService;
     }
 
     /**
@@ -40,25 +43,63 @@ public class PassengerOptionSelectionService {
         RescueCase rescueCase = rescueCaseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
-        if ("PASSENGER_DECLINED".equals(rescueCase.getState()) || "DONE".equals(rescueCase.getState())) {
-            throw new IllegalStateException("Cannot select option on case in state: " + rescueCase.getState());
+        String currentState = rescueCase.getState();
+        if (stateMachineService.isTerminal(currentState)
+                || "PASSENGER_DECLINED".equals(currentState)
+                || "ABANDONED".equalsIgnoreCase(currentState)
+                || "DONE".equals(currentState)) {
+            throw new IllegalStateException("Cannot select option on case in state: " + currentState);
         }
 
-        RebookOption option = optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
+        java.util.List<RebookOption> options = optionRepository.findByCaseIdOrderByRankAsc(caseId);
+        if (options.isEmpty()) {
+            throw new IllegalArgumentException("No alternative flight options found for case " + caseId);
+        }
+
+        RebookOption option = options.stream()
                 .filter(o -> o.getId().equalsIgnoreCase(optionCode)
                         || o.getId().endsWith("-" + optionCode)
                         || optionCode.endsWith("-" + o.getId()))
                 .findFirst()
+                .or(() -> options.stream()
+                        .filter(o -> o.getFlight() != null && o.getFlight().equalsIgnoreCase(optionCode))
+                        .findFirst())
+                .or(() -> options.stream()
+                        .filter(o -> {
+                            if (optionCode.matches("^(?i)O[0-9]+$")) {
+                                int r = Integer.parseInt(optionCode.substring(1));
+                                return o.getRank() == r;
+                            }
+                            if (optionCode.matches("^[0-9]+$")) {
+                                int r = Integer.parseInt(optionCode);
+                                return o.getRank() == r;
+                            }
+                            return false;
+                        })
+                        .findFirst())
                 .orElseThrow(() -> new IllegalArgumentException("Option " + optionCode + " not found for case " + caseId));
+
+        // If passenger changed their selected option, invalidate any previous unverified OTP challenges
+        if (rescueCase.getSelectedOptionId() != null && !rescueCase.getSelectedOptionId().equals(option.getId())) {
+            passengerOtpService.invalidateOtpsForCase(caseId, "OPTION_CHANGED_TO_" + option.getId());
+        }
 
         stateMachineService.transition(
                 rescueCase,
                 CaseStateMachineService.STATE_OPTION_SELECTED,
                 "Passenger",
-                "Passenger selected Option " + optionCode + " (" + option.getFlight() + ")"
+                "Passenger selected Option " + option.getId() + " (" + option.getFlight() + ")"
         );
 
         rescueCase.setSelectedOptionId(option.getId());
+        rescueCase.setSelectedFlight(option.getFlight());
+
+        // Persist immutable snapshot of selected option details
+        String snapshot = String.format("{\"optionId\":\"%s\",\"flight\":\"%s\",\"provider\":\"%s\",\"cost\":%d,\"currency\":\"%s\",\"departure\":\"%s\",\"arrival\":\"%s\"}",
+                option.getId(), option.getFlight(), option.getProvider() != null ? option.getProvider() : "MOCK_AIRLINE",
+                option.getExtraCost(), option.getCurrency() != null ? option.getCurrency() : "INR",
+                option.getDeparture(), option.getArrival());
+        rescueCase.setSelectedOptionSnapshot(snapshot);
 
         stateMachineService.transition(
                 rescueCase,
@@ -88,10 +129,10 @@ public class PassengerOptionSelectionService {
                 "PASSENGER_OPTION_SELECTED",
                 "Passenger",
                 String.format("Option %s (%s, Extra Fare: ₹%,d) selected by passenger. Confirmation OTP challenge armed.",
-                        optionCode, option.getFlight(), option.getExtraCost())
+                        option.getId(), option.getFlight(), option.getExtraCost())
         );
 
-        log.info("[Passenger Selection] Option {} selected for case {}", option.getId(), caseId);
+        log.info("[Passenger Selection] Option {} ({}) selected for case {}", option.getId(), option.getFlight(), caseId);
         return option;
     }
 

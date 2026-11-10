@@ -2,6 +2,9 @@ package com.flyo.rescue;
 
 import com.flyo.rescue.client.PredictionServiceClient;
 import com.flyo.rescue.dto.*;
+import com.flyo.rescue.model.OperatorAccount;
+import com.flyo.rescue.repository.OperatorAccountRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Map;
@@ -24,6 +28,22 @@ public class Stage8PredictiveIntelligenceTest {
 
     @Autowired
     private PredictionServiceClient predictionClient;
+
+    @Autowired
+    private OperatorAccountRepository operatorAccountRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @BeforeEach
+    void setUp() {
+        if (operatorAccountRepository.findByUsername("admin").isEmpty()) {
+            operatorAccountRepository.save(new OperatorAccount(
+                    "USR-2", "admin", passwordEncoder.encode("AdminSecret123!"),
+                    "System Admin", "ROLE_ADMIN", true, "919999999999", "tenant_default", "*"
+            ));
+        }
+    }
 
     @Test
     @DisplayName("Stage 8: Delay Forecast endpoint returns quantile intervals and risk tier")

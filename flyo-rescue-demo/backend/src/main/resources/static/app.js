@@ -410,6 +410,7 @@ async function fetchOptions(caseId) {
         const response = await apiFetch(`/api/cases/${encodeURIComponent(caseId)}/options`);
         if (!response.ok) return;
         const options = await response.json();
+        window.latestFetchedOptions = options;
         renderOptions(options);
 
         // Refresh active case so state badge smoothly updates to OPTIONS_READY
@@ -448,6 +449,28 @@ async function approveOption(caseId, optionId) {
         await fetchWhatsAppOperatorChat();
     } catch (error) {
         alert("Failed to approve option: " + error.message);
+    }
+}
+
+async function reconcileItinerary(caseId) {
+    const targetCaseId = caseId || (currentActiveCase ? currentActiveCase.id : "C1");
+    try {
+        const response = await apiFetch(`/api/cases/${encodeURIComponent(targetCaseId)}/reconcile`, {
+            method: "POST"
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || `Reconciliation failed with status: ${response.status}`);
+        }
+
+        const updatedCase = await response.json();
+        currentActiveCase = updatedCase;
+        renderCase(updatedCase);
+        await fetchOptions(targetCaseId);
+        await fetchAudit(targetCaseId);
+    } catch (error) {
+        alert("Failed to reconcile itinerary: " + error.message);
     }
 }
 
@@ -562,13 +585,68 @@ function renderCase(c, silent = false) {
         stateEl.className = "case-state-badge";
         if (c.state === "AWAITING_APPROVAL") stateEl.classList.add("state-awaiting");
         else if (c.state === "ESCALATED") stateEl.classList.add("state-escalated");
-        else if (c.state === "FAILED_ESCALATED") stateEl.classList.add("state-failed-escalated");
+        else if (c.state === "FAILED_ESCALATED" || c.state === "DATA_RECONCILIATION_REQUIRED") stateEl.classList.add("state-failed-escalated");
         else if (c.state === "REBOOKING") stateEl.classList.add("state-rebooking");
         else if (c.state === "DONE") stateEl.classList.add("badge-on-time");
     }
 
+    // Canonical Itinerary & Segment details
+    const pnrEl = document.getElementById("case-pnr");
+    if (pnrEl) pnrEl.textContent = c.pnr || (c.id === "C1" ? "HYD123" : c.id);
+
+    const paxNameEl = document.getElementById("case-passenger-name");
+    if (paxNameEl) paxNameEl.textContent = c.passengerName ? `— ${c.passengerName}` : "";
+
+    const bookingRouteEl = document.getElementById("case-booking-route");
+    if (bookingRouteEl) {
+        if (c.originAirport && c.destinationAirport) {
+            bookingRouteEl.textContent = `${c.originAirport} → ${c.destinationAirport}`;
+        } else {
+            bookingRouteEl.textContent = c.route || c.cancelledSegment || "--";
+        }
+    }
+
     const segEl = document.getElementById("case-segment");
     if (segEl) segEl.textContent = c.cancelledSegment;
+
+    const segIdEl = document.getElementById("case-segment-id");
+    if (segIdEl) segIdEl.textContent = c.disruptedSegmentId || "SEG-PRIMARY";
+
+    const itinVerEl = document.getElementById("case-itinerary-version");
+    if (itinVerEl) itinVerEl.textContent = c.itineraryVersion ? `v${c.itineraryVersion}` : "v1.0";
+
+    const itinIdEl = document.getElementById("case-itinerary-id");
+    if (itinIdEl) itinIdEl.textContent = c.itineraryId || `ITIN-${c.id}`;
+
+    const finalDestEl = document.getElementById("case-final-dest");
+    if (finalDestEl) {
+        finalDestEl.textContent = c.finalDestination || c.destinationAirport || (c.route ? c.route.split("→").pop().trim() : "--");
+    }
+
+    const onwardSummaryEl = document.getElementById("case-onward-segments-text");
+    if (onwardSummaryEl) {
+        if (c.onwardSegmentsCount && c.onwardSegmentsCount > 0) {
+            onwardSummaryEl.innerHTML = `<strong style="color:#0284c7;">${c.onwardSegmentsCount} verified onward segment(s) remaining</strong>`;
+        } else {
+            onwardSummaryEl.textContent = "Point-to-point (No onward connections)";
+        }
+    }
+
+    // Phase 4 & 7: DATA_RECONCILIATION_REQUIRED Banner & Fail-Closed Lock
+    const mismatchBanner = document.getElementById("case-data-mismatch-banner");
+    const mismatchText = document.getElementById("case-mismatch-reason-text");
+    const isReconciliationRequired = c.state === "DATA_RECONCILIATION_REQUIRED";
+
+    if (mismatchBanner) {
+        if (isReconciliationRequired || c.mismatchReason) {
+            mismatchBanner.style.display = "block";
+            if (mismatchText) {
+                mismatchText.textContent = c.mismatchReason || "Disruption flight segment route does not match canonical booking segment. Automated execution blocked.";
+            }
+        } else {
+            mismatchBanner.style.display = "none";
+        }
+    }
 
     const impEl = document.getElementById("case-impact-text");
     if (impEl) impEl.textContent = c.impact;
@@ -607,7 +685,7 @@ function renderCase(c, silent = false) {
     const rebookSuccessCard = document.getElementById("rebook-success-card");
     const rebookFailureCard = document.getElementById("rebook-failure-card");
 
-    if (c.approvedOptionId && c.state !== "ESCALATED" && c.state !== "FAILED_ESCALATED") {
+    if (c.approvedOptionId && c.state !== "ESCALATED" && c.state !== "FAILED_ESCALATED" && c.state !== "DATA_RECONCILIATION_REQUIRED") {
         if (approvalBanner) {
             approvalBanner.style.display = "flex";
             const appTxt = document.getElementById("approved-option-text");
@@ -797,20 +875,21 @@ async function fetchPaymentDetails(caseId) {
             }
             const numEl = document.getElementById("vcc-display-number");
             if (numEl) {
-                const raw = vcc.maskedCardNumber || "8821";
-                const last4 = raw.replace(/\D/g, "").slice(-4) || "8821";
+                const raw = vcc.maskedCardNumber || (vcc.cardLast4 ? `•••• ${vcc.cardLast4}` : "••••");
+                const last4Match = raw.replace(/\D/g, "").slice(-4);
+                const last4 = last4Match.length === 4 ? last4Match : (vcc.cardLast4 || "••••");
                 numEl.textContent = `•••• •••• •••• ${last4}`;
             }
             const amtEl = document.getElementById("vcc-display-amount");
-            if (amtEl) amtEl.textContent = `₹${vcc.amount ? vcc.amount.toLocaleString() : '4,200'}`;
+            if (amtEl) amtEl.textContent = `₹${vcc.amount ? vcc.amount.toLocaleString() : '0'}`;
             const mccEl = document.getElementById("vcc-display-mcc");
-            if (mccEl) mccEl.textContent = vcc.merchantCategory || "MCC 3000 (Airlines)";
+            if (mccEl) mccEl.textContent = vcc.merchantCategory || "MCC 3000 (Airlines / Air Carriers)";
 
             const ledgerText = document.getElementById("vcc-ledger-text");
             if (ledgerText) {
                 if (data.transactions && data.transactions.length > 0) {
                     const txn = data.transactions[0];
-                    ledgerText.innerHTML = `<strong>Settlement Complete:</strong> Ref: ${escapeHtml(txn.referenceId || txn.id)} &middot; Vendor: ${escapeHtml(txn.vendor)} &middot; ₹${txn.amount ? txn.amount.toLocaleString() : '4,200'} settled`;
+                    ledgerText.innerHTML = `<strong>Settlement Complete:</strong> Ref: ${escapeHtml(txn.referenceId || txn.id)} &middot; Vendor: ${escapeHtml(txn.vendor)} &middot; ₹${txn.amount ? txn.amount.toLocaleString() : '0'} settled`;
                     ledgerText.style.background = "#dcfce7";
                     ledgerText.style.color = "#15803d";
                 } else {
@@ -927,7 +1006,7 @@ function WhatsAppMessageBubble({ msg, index }) {
     }
 
     const pnrMatch = msg.text && msg.text.match(/PNR:?\s*\*?([A-Z0-9]+)\*?/i);
-    const pnrCode = pnrMatch ? pnrMatch[1] : (msg.text && msg.text.includes("R7X2K9") ? "R7X2K9" : null);
+    const pnrCode = pnrMatch ? pnrMatch[1] : null;
 
     let stageBadge = '<span class="badge" style="background:#dcfce7; color:#15803d; font-size:0.65rem;">Verified</span>';
     if (isStage1) {
@@ -955,14 +1034,28 @@ function WhatsAppMessageBubble({ msg, index }) {
     }
     // Step 6 Interactive Flight Option Selection Buttons
     else if (msg.text && (msg.text.includes("OPTION 1") || msg.text.includes("Fare Difference:")) && !msg.text.includes("confirmation code is")) {
-        interactiveButtonsHtml = `
-            <div class="passenger-wa-buttons-tray" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.6rem;">
-                <button onclick="submitPassengerChatInput(null, 'SELECT_OPTION_O1')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
+        let optButtonsHtml = '';
+        if (window.latestFetchedOptions && window.latestFetchedOptions.length > 0) {
+            const sorted = [...window.latestFetchedOptions].sort((a, b) => a.rank - b.rank);
+            optButtonsHtml = sorted.slice(0, 2).map(opt => `
+                <button onclick="submitPassengerChatInput(null, 'SELECT_OPTION_${escapeHtml(opt.id)}')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
+                    ✈️ Select ${escapeHtml(opt.flight)} (${opt.rank === 1 ? 'Recommended' : 'Option ' + opt.rank})
+                </button>
+            `).join('');
+        } else {
+            optButtonsHtml = `
+                <button onclick="submitPassengerChatInput(null, 'SELECT_OPTION_1')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
                     ✈️ Select Option 1 (Recommended)
                 </button>
-                <button onclick="submitPassengerChatInput(null, 'SELECT_OPTION_O2')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
+                <button onclick="submitPassengerChatInput(null, 'SELECT_OPTION_2')" class="wa-action-btn" style="padding:0.45rem; background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; border:1px solid #bfdbfe; border-radius:6px; cursor:pointer;">
                     ✈️ Select Option 2
                 </button>
+            `;
+        }
+
+        interactiveButtonsHtml = `
+            <div class="passenger-wa-buttons-tray" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.6rem;">
+                ${optButtonsHtml}
                 <button onclick="submitPassengerChatInput(null, 'ABANDON_RESCUE')" class="wa-action-btn" style="padding:0.45rem; background:#f8fafc; color:#64748b; font-size:0.75rem; font-weight:600; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">
                     ❌ ABANDON RESCUE
                 </button>
@@ -1173,6 +1266,7 @@ function renderOptions(options) {
     container.innerHTML = options.map(opt => {
         const isApproved = currentActiveCase && currentActiveCase.approvedOptionId === opt.id && currentActiveCase.state !== "ESCALATED";
         const isEscalated = currentActiveCase && currentActiveCase.state === "ESCALATED";
+        const isReconciliationRequired = currentActiveCase && currentActiveCase.state === "DATA_RECONCILIATION_REQUIRED";
 
         const isRank1 = opt.rank === 1;
         const isRank2 = opt.rank === 2;
@@ -1207,6 +1301,19 @@ function renderOptions(options) {
         const riskBg = riskLevel === 'LOW' ? '#dcfce7' : (riskLevel === 'MODERATE' ? '#fef9c3' : (riskLevel === 'ELEVATED' ? '#fed7aa' : '#fee2e2'));
         const riskColor = riskLevel === 'LOW' ? '#166534' : (riskLevel === 'MODERATE' ? '#854d0e' : (riskLevel === 'ELEVATED' ? '#9a3412' : '#991b1b'));
 
+        let approveBtnHtml = "";
+        if (isReconciliationRequired) {
+            approveBtnHtml = `<button class="btn btn-approve" disabled style="background:#cbd5e1; color:#64748b; cursor:not-allowed;" title="Action blocked: Server-side reconciliation required">Locked (Reconciliation Required)</button>`;
+        } else if (isApproved) {
+            approveBtnHtml = `<button class="btn btn-approve approved" disabled>Approved</button>`;
+        } else {
+            approveBtnHtml = `<button class="btn btn-approve" ${isEscalated ? 'disabled' : ''} onclick="approveOption('${escapeHtml(opt.caseId)}', '${escapeHtml(opt.id)}')">Approve Option</button>`;
+        }
+
+        const sourceSeg = opt.sourceSegmentId || (currentActiveCase ? currentActiveCase.disruptedSegmentId : 'SEG-PRIMARY');
+        const finalDest = opt.finalDestination || (currentActiveCase ? currentActiveCase.finalDestination : (opt.destinationAirport || 'Verified Dest'));
+        const itinVer = opt.itineraryVersion ? `v${opt.itineraryVersion}` : (currentActiveCase && currentActiveCase.itineraryVersion ? `v${currentActiveCase.itineraryVersion}` : 'v1.0');
+
         return `
             <div class="option-card ${cardClass}" id="option-${escapeHtml(opt.id)}">
                 <div class="option-top-row">
@@ -1217,13 +1324,22 @@ function renderOptions(options) {
                         <span style="font-size:0.72rem; font-weight:700; background:${riskBg}; color:${riskColor}; padding:0.2rem 0.55rem; border-radius:4px; display:inline-flex; align-items:center; gap:0.25rem;">
                             Risk: ${escapeHtml(riskLevel)} (${riskScore}/100)
                         </span>
+                        <span style="font-size:0.7rem; font-weight:600; background:#e0f2fe; color:#0369a1; padding:0.15rem 0.45rem; border-radius:4px;">
+                            ${escapeHtml(itinVer)} &middot; Dest: ${escapeHtml(finalDest)}
+                        </span>
                     </div>
                     <div class="option-actions-area">
                         <div class="fare-tag ${fareTagClass}">${fareFormatted}</div>
-                        ${isApproved 
-                            ? `<button class="btn btn-approve approved" disabled>Approved</button>`
-                            : `<button class="btn btn-approve" ${isEscalated ? 'disabled' : ''} onclick="approveOption('${escapeHtml(opt.caseId)}', '${escapeHtml(opt.id)}')">Approve Option</button>`}
+                        ${approveBtnHtml}
                     </div>
+                </div>
+
+                <!-- Itinerary Referential Route & Destination Integrity Line -->
+                <div style="margin: 0.5rem 0 0.25rem 0; font-size: 0.78rem; color: #475569; display: flex; gap: 1rem; flex-wrap: wrap; background: #f1f5f9; padding: 0.35rem 0.65rem; border-radius: 4px;">
+                    <div><strong>Disrupted Segment:</strong> <span style="font-family: monospace;">${escapeHtml(sourceSeg)}</span></div>
+                    <div><strong>Proposed Replacement:</strong> <span style="font-family: monospace; font-weight: 700; color: #0f172a;">${escapeHtml(opt.route)}</span></div>
+                    <div><strong>Preserved Final Destination:</strong> <strong style="color: #0369a1;">${escapeHtml(finalDest)}</strong></div>
+                    ${opt.deterministicCacheKey ? `<div><span style="font-size:0.7rem; color:#64748b;">Key: ${escapeHtml(opt.deterministicCacheKey.substring(0, 16))}...</span></div>` : ''}
                 </div>
 
                 <div class="option-meta-grid">

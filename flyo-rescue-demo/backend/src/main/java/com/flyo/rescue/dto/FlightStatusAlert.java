@@ -6,6 +6,11 @@ public class FlightStatusAlert {
     private int delayMinutes;
     private String reason;
     private String source; // FlightAware, Cirium, AviationStack, AirlineDirect
+    private String originAirport;
+    private String destinationAirport;
+    private String scheduledDeparture;
+    private String bookingId;
+    private String segmentId;
 
     public FlightStatusAlert() {
     }
@@ -16,6 +21,17 @@ public class FlightStatusAlert {
         this.delayMinutes = delayMinutes;
         this.reason = reason;
         this.source = source;
+    }
+
+    public FlightStatusAlert(String flight, String status, int delayMinutes, String reason, String source,
+                             String originAirport, String destinationAirport) {
+        this.flight = flight;
+        this.status = status;
+        this.delayMinutes = delayMinutes;
+        this.reason = reason;
+        this.source = source;
+        this.originAirport = originAirport;
+        this.destinationAirport = destinationAirport;
     }
 
     public String getFlight() {
@@ -56,5 +72,45 @@ public class FlightStatusAlert {
 
     public void setSource(String source) {
         this.source = source;
+    }
+
+    public String getOriginAirport() {
+        return originAirport;
+    }
+
+    public void setOriginAirport(String originAirport) {
+        this.originAirport = originAirport;
+    }
+
+    public String getDestinationAirport() {
+        return destinationAirport;
+    }
+
+    public void setDestinationAirport(String destinationAirport) {
+        this.destinationAirport = destinationAirport;
+    }
+
+    public String getScheduledDeparture() {
+        return scheduledDeparture;
+    }
+
+    public void setScheduledDeparture(String scheduledDeparture) {
+        this.scheduledDeparture = scheduledDeparture;
+    }
+
+    public String getBookingId() {
+        return bookingId;
+    }
+
+    public void setBookingId(String bookingId) {
+        this.bookingId = bookingId;
+    }
+
+    public String getSegmentId() {
+        return segmentId;
+    }
+
+    public void setSegmentId(String segmentId) {
+        this.segmentId = segmentId;
     }
 }

@@ -57,15 +57,20 @@ public class PassengerOtpService {
     }
 
     /**
-     * Creates a new bound Passenger Confirmation OTP Challenge.
+     * Creates a new bound Passenger Confirmation OTP Challenge with attempt and tenant binding.
      */
     @Transactional
     public synchronized String createPassengerOtpChallenge(String caseId, String passengerPhone,
-                                                          String optionId, int amount, String currency) {
+                                                          String optionId, int amount, String currency,
+                                                          String rescueAttemptId, String tenantId,
+                                                          String permittedAction) {
         String cleanPhone = cleanPhone(passengerPhone);
         if (isLockedOut(cleanPhone)) {
             throw new IllegalStateException("Security rate limit: phone number " + cleanPhone + " is temporarily locked out.");
         }
+
+        // Invalidate any prior active OTP challenges for this case before issuing a new one
+        invalidateOtpsForCase(caseId, "NEW_CHALLENGE_REQUESTED");
 
         // Generate cryptographically secure 6-digit code
         int num = secureRandom.nextInt(900_000) + 100_000;
@@ -79,6 +84,10 @@ public class PassengerOtpService {
         PassengerOtpChallenge challenge = new PassengerOtpChallenge(
                 challengeId, caseId, cleanPhone, optionId, amount, currency, otpHash, now, expiresAt
         );
+        challenge.setRescueAttemptId(rescueAttemptId != null && !rescueAttemptId.isBlank() ? rescueAttemptId : "ATTEMPT-1");
+        challenge.setTenantId(tenantId != null && !tenantId.isBlank() ? tenantId : "Flyo");
+        challenge.setPermittedAction(permittedAction != null && !permittedAction.isBlank() ? permittedAction : "CONFIRM_RESCUE");
+        challenge.setInvalidated(false);
 
         repository.save(challenge);
         ephemeralActiveCodes.put(challengeId, rawCode);
@@ -88,14 +97,23 @@ public class PassengerOtpService {
                 caseId,
                 "PASSENGER_OTP_ISSUED",
                 "Flyo Security Engine",
-                String.format("Generated single-use Passenger Confirmation OTP for case %s, option %s, amount %s %d. Expires in %dm.",
-                        caseId, optionId, currency, amount, OTP_EXPIRY_MINUTES)
+                String.format("Generated single-use Passenger Confirmation OTP for case %s (Attempt %s), option %s, amount %s %d. Expires in %dm.",
+                        caseId, challenge.getRescueAttemptId(), optionId, currency, amount, OTP_EXPIRY_MINUTES)
         );
 
-        log.info("[Passenger OTP] Generated OTP challenge for case {}, phone {}, option {}, amount {} {}",
-                caseId, cleanPhone, optionId, currency, amount);
+        log.info("[Passenger OTP] Generated OTP challenge {} for case {}, attempt {}, phone {}, option {}, amount {} {}",
+                challengeId, caseId, challenge.getRescueAttemptId(), cleanPhone, optionId, currency, amount);
 
         return rawCode;
+    }
+
+    /**
+     * Backward-compatible overload.
+     */
+    @Transactional
+    public synchronized String createPassengerOtpChallenge(String caseId, String passengerPhone,
+                                                          String optionId, int amount, String currency) {
+        return createPassengerOtpChallenge(caseId, passengerPhone, optionId, amount, currency, null, null, "CONFIRM_RESCUE");
     }
 
     /**
@@ -123,6 +141,12 @@ public class PassengerOtpService {
 
         PassengerOtpChallenge challenge = challengeOpt.get();
 
+        // Check explicit invalidation (e.g. Abandoned, Option Changed, Replaced)
+        if (challenge.isInvalidated()) {
+            ephemeralActiveCodes.remove(challenge.getId());
+            return new PassengerOtpResult(false, "INVALIDATED", challenge);
+        }
+
         // Check expiration
         if (LocalDateTime.now().isAfter(challenge.getExpiresAt())) {
             ephemeralActiveCodes.remove(challenge.getId());
@@ -145,6 +169,10 @@ public class PassengerOtpService {
         if (submittedHash.equals(challenge.getOtpHash())) {
             challenge.setVerified(true);
             challenge.setVerifiedAt(LocalDateTime.now());
+            // Single-use enforcement: mark invalidated so it cannot be re-verified
+            challenge.setInvalidated(true);
+            challenge.setInvalidatedAt(LocalDateTime.now());
+            challenge.setInvalidatedReason("CONSUMED_SINGLE_USE");
             repository.save(challenge);
             ephemeralActiveCodes.remove(challenge.getId());
 
@@ -180,6 +208,33 @@ public class PassengerOtpService {
         String cleanPhone = cleanPhone(passengerPhone);
         return repository.findTopByPassengerPhoneAndCaseIdAndVerifiedFalseOrderByCreatedAtDesc(cleanPhone, caseId)
                 .map(c -> ephemeralActiveCodes.get(c.getId()));
+    }
+
+    /**
+     * Explicitly invalidates all active unverified OTP challenges for a given case.
+     * Invoked when an attempt is abandoned, expired, or when the selected option changes.
+     */
+    @Transactional
+    public synchronized void invalidateOtpsForCase(String caseId, String reason) {
+        if (caseId == null || caseId.isBlank()) return;
+        List<PassengerOtpChallenge> activeChallenges = repository.findByCaseIdOrderByCreatedAtDesc(caseId);
+        for (PassengerOtpChallenge ch : activeChallenges) {
+            if (!ch.isVerified() || !ch.isInvalidated()) {
+                ch.setInvalidated(true);
+                ch.setInvalidatedAt(LocalDateTime.now());
+                ch.setInvalidatedReason(reason);
+                ch.setExpiresAt(LocalDateTime.now().minusMinutes(1)); // Expire immediately
+                repository.save(ch);
+                ephemeralActiveCodes.remove(ch.getId());
+            }
+        }
+        auditService.logEvent(
+                caseId,
+                "PASSENGER_OTP_INVALIDATED",
+                "Flyo Security Engine",
+                "Invalidated active OTP challenges for case " + caseId + ". Reason: " + reason
+        );
+        log.info("[Passenger OTP] Invalidated active challenges for case {} due to: {}", caseId, reason);
     }
 
     /**

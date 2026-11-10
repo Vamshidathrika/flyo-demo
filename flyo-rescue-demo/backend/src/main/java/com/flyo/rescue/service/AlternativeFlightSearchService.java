@@ -28,6 +28,7 @@ public class AlternativeFlightSearchService {
     private final BookingRepository bookingRepository;
     private final CaseStateMachineService stateMachineService;
     private final AuditService auditService;
+    private final CanonicalItineraryService canonicalItineraryService;
 
     public AlternativeFlightSearchService(FlightSearchService flightSearchService,
                                          RankingEngine rankingEngine,
@@ -35,7 +36,8 @@ public class AlternativeFlightSearchService {
                                          RescueCaseRepository rescueCaseRepository,
                                          BookingRepository bookingRepository,
                                          CaseStateMachineService stateMachineService,
-                                         AuditService auditService) {
+                                         AuditService auditService,
+                                         CanonicalItineraryService canonicalItineraryService) {
         this.flightSearchService = flightSearchService;
         this.rankingEngine = rankingEngine;
         this.optionRepository = optionRepository;
@@ -43,6 +45,7 @@ public class AlternativeFlightSearchService {
         this.bookingRepository = bookingRepository;
         this.stateMachineService = stateMachineService;
         this.auditService = auditService;
+        this.canonicalItineraryService = canonicalItineraryService;
     }
 
     /**
@@ -53,16 +56,33 @@ public class AlternativeFlightSearchService {
         RescueCase rescueCase = rescueCaseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
-        Booking booking = bookingRepository.findById(rescueCase.getBookingId()).orElse(null);
-        List<RebookOption> rawOptions;
-        if (booking != null) {
-            rawOptions = flightSearchService.findCandidateOptions(caseId, booking);
-        } else {
-            rawOptions = flightSearchService.findCandidateOptions(caseId,
-                    new Booking("B-TEMP", rescueCase.getPassengerName(), "TEMP", "HYD → DEL",
-                            rescueCase.getFlight(), "Tonight", rescueCase.getMissedConnection(),
-                            rescueCase.getHotelRisk(), "Flyo", "Confirmed"));
+        if (CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
+            log.warn("[AlternativeFlightSearchService] Case {} in DATA_RECONCILIATION_REQUIRED. Generation blocked.", caseId);
+            return List.of();
         }
+
+        Booking booking = bookingRepository.findById(rescueCase.getBookingId()).orElse(null);
+        if (booking == null) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, "Underlying booking not found for case: " + caseId);
+            return List.of();
+        }
+
+        var segments = canonicalItineraryService.normalizeAndPersistSegments(booking);
+        var segOpt = canonicalItineraryService.resolveDisruptedSegment(booking, rescueCase.getFlightNumber(), rescueCase.getOriginAirport(), rescueCase.getDestinationAirport());
+        if (segOpt.isEmpty()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase,
+                    String.format("Disrupted segment could not be verified for flight %s and route %s -> %s on booking %s.",
+                            rescueCase.getFlightNumber(), rescueCase.getOriginAirport(), rescueCase.getDestinationAirport(), booking.getId()));
+            return List.of();
+        }
+
+        var validation = canonicalItineraryService.validateItineraryIntegrity(rescueCase, booking, segOpt.get());
+        if (!validation.isValid()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, validation.mismatchReason());
+            return List.of();
+        }
+
+        List<RebookOption> rawOptions = flightSearchService.findCandidateOptions(caseId, booking, segOpt.get(), rescueCase.getFinalDestination());
 
         if (rawOptions == null || rawOptions.isEmpty()) {
             stateMachineService.transition(

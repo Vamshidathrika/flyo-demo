@@ -47,6 +47,13 @@ public class PassengerConfirmationService {
         RescueCase rescueCase = rescueCaseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
+        if (stateMachineService.isTerminal(rescueCase.getState())
+                || CaseStateMachineService.STATE_PASSENGER_DECLINED.equals(rescueCase.getState())
+                || CaseStateMachineService.STATE_ABANDONED.equals(rescueCase.getState())
+                || CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
+            throw new IllegalStateException("Cannot request confirmation OTP: case " + caseId + " is in state " + rescueCase.getState());
+        }
+
         String optionId = rescueCase.getSelectedOptionId();
         if (optionId == null || optionId.isBlank()) {
             throw new IllegalStateException("No option currently selected for case " + caseId);
@@ -56,7 +63,8 @@ public class PassengerConfirmationService {
                 .orElseThrow(() -> new IllegalArgumentException("Option not found: " + optionId));
 
         return passengerOtpService.createPassengerOtpChallenge(
-                caseId, passengerPhone, option.getId(), option.getExtraCost(), "INR"
+                caseId, passengerPhone, option.getId(), option.getExtraCost(), "INR",
+                rescueCase.getRescueAttemptId(), rescueCase.getTenantId(), "CONFIRM_RESCUE"
         );
     }
 
@@ -68,6 +76,20 @@ public class PassengerConfirmationService {
     public PassengerOtpService.PassengerOtpResult confirmAndVerify(String caseId, String passengerPhone, String submittedCode) {
         RescueCase rescueCase = rescueCaseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        // Security check: If case is abandoned, declined, or already completed, reject immediately
+        String state = rescueCase.getState();
+        if (stateMachineService.isTerminal(state)
+                || CaseStateMachineService.STATE_PASSENGER_DECLINED.equals(state)
+                || CaseStateMachineService.STATE_ABANDONED.equals(state)
+                || "CANCELLED".equalsIgnoreCase(state)
+                || CaseStateMachineService.STATE_DONE.equals(state)
+                || CaseStateMachineService.STATE_FAILED_ESCALATED.equals(state)
+                || CaseStateMachineService.STATE_BOOKING_FAILED.equals(state)
+                || CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(state)) {
+            log.warn("[Passenger Confirmation] Rejected OTP verification for case {} because state is {}", caseId, state);
+            return new PassengerOtpService.PassengerOtpResult(false, "ATTEMPT_ABANDONED", null);
+        }
 
         String optionId = rescueCase.getSelectedOptionId();
         if (optionId == null || optionId.isBlank()) {
@@ -84,8 +106,12 @@ public class PassengerConfirmationService {
         if (result.valid()) {
             // Set passenger confirmed properties
             rescueCase.setApprovedOptionId(option.getId());
+            rescueCase.setSelectedFlight(option.getFlight());
             rescueCase.setApprovedBy("Passenger (OTP Verified: " + passengerPhone + ")");
             rescueCase.setApprovedAt(LocalDateTime.now());
+            rescueCase.setPassengerConfirmedAmount(option.getExtraCost());
+            rescueCase.setPassengerConfirmedCurrency("INR");
+            rescueCase.setPassengerOtpVerifiedAt(LocalDateTime.now());
             rescueCase.setPassengerConfirmedAmount(option.getExtraCost());
             rescueCase.setPassengerConfirmedCurrency("INR");
             rescueCase.setPassengerOtpVerifiedAt(LocalDateTime.now());

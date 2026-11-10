@@ -107,7 +107,7 @@ public class FlyoDataSeeder implements CommandLineRunner {
             System.out.println("Flyo Rescue: 5 Seed Bookings initialized successfully.");
         }
 
-        if (operatorAccountRepository.count() == 0) {
+        if (operatorAccountRepository.findByUsername("admin").isEmpty()) {
             List<OperatorAccount> initialAccounts = List.of(
                     new OperatorAccount("USR-1", "operator", passwordEncoder.encode("Operator123!"), "Flyo Operator", "ROLE_OPERATOR", true, "919876543210", "tenant_default", "tenant_default"),
                     new OperatorAccount("USR-2", "admin", passwordEncoder.encode("AdminSecret123!"), "System Admin", "ROLE_ADMIN", true, "919999999999", "tenant_default", "*"),

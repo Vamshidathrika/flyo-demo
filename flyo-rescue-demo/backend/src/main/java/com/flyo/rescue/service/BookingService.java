@@ -24,15 +24,18 @@ public class BookingService {
     private final com.flyo.rescue.repository.RescueCaseRepository caseRepository;
     private final com.flyo.rescue.repository.RebookOptionRepository optionRepository;
     private final org.springframework.core.env.Environment environment;
+    private final CanonicalItineraryService canonicalItineraryService;
 
     public BookingService(BookingRepository bookingRepository,
                           @org.springframework.context.annotation.Lazy com.flyo.rescue.repository.RescueCaseRepository caseRepository,
                           @org.springframework.context.annotation.Lazy com.flyo.rescue.repository.RebookOptionRepository optionRepository,
-                          org.springframework.core.env.Environment environment) {
+                          org.springframework.core.env.Environment environment,
+                          @org.springframework.context.annotation.Lazy CanonicalItineraryService canonicalItineraryService) {
         this.bookingRepository = bookingRepository;
         this.caseRepository = caseRepository;
         this.optionRepository = optionRepository;
         this.environment = environment;
+        this.canonicalItineraryService = canonicalItineraryService;
     }
 
     private boolean isGlobalAdmin() {
@@ -93,7 +96,15 @@ public class BookingService {
         if (booking.getTenantId() == null || booking.getTenantId().isBlank()) {
             booking.setTenantId(TenantContext.getTenantId());
         }
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+        if (canonicalItineraryService != null) {
+            try {
+                canonicalItineraryService.normalizeAndPersistSegments(saved);
+            } catch (Exception e) {
+                log.warn("[BookingService] Failed to normalize segments for booking {}: {}", saved.getId(), e.getMessage());
+            }
+        }
+        return saved;
     }
 
     @Transactional

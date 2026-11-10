@@ -10,6 +10,7 @@ public class RebookResultDto {
     private String optionId;
     private String flight;
     private String newPnr;
+    private String providerOrderId;
     private String error;
     private int retryCount;
     private List<String> steps;
@@ -101,5 +102,13 @@ public class RebookResultDto {
 
     public void setScreenshots(List<String> screenshots) {
         this.screenshots = screenshots;
+    }
+
+    public String getProviderOrderId() {
+        return providerOrderId;
+    }
+
+    public void setProviderOrderId(String providerOrderId) {
+        this.providerOrderId = providerOrderId;
     }
 }

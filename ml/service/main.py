@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from ml.service.alert_engine import AlertEngine
 from ml.service.config import HOST, MODEL_VERSION, PORT
@@ -109,6 +109,10 @@ app.add_middleware(
 # -----------------------------------------------------------------------------
 # CORE INFERENCE ENDPOINTS
 # -----------------------------------------------------------------------------
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/docs")
 
 @app.get("/health/live", summary="Liveness Probe")
 async def health_live() -> Dict[str, str]:

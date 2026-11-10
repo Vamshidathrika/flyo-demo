@@ -55,7 +55,7 @@ public class PartnerPortalPlaywrightAdapter implements FlightBookingProvider {
             throw new IllegalStateException("Playwright agent directory not found at: " + agentPath);
         }
 
-        String passenger = (passengerName != null && !passengerName.isBlank()) ? passengerName : "Ananya Sharma";
+        String passenger = (passengerName != null && !passengerName.isBlank()) ? passengerName : "Passenger";
 
         List<String> cmd = new ArrayList<>(List.of(
                 "node",

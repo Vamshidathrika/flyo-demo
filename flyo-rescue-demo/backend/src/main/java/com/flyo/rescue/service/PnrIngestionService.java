@@ -15,10 +15,13 @@ public class PnrIngestionService {
 
     private final BookingRepository bookingRepository;
     private final AuditService auditService;
+    private final CanonicalItineraryService canonicalItineraryService;
 
-    public PnrIngestionService(BookingRepository bookingRepository, AuditService auditService) {
+    public PnrIngestionService(BookingRepository bookingRepository, AuditService auditService,
+                               CanonicalItineraryService canonicalItineraryService) {
         this.bookingRepository = bookingRepository;
         this.auditService = auditService;
+        this.canonicalItineraryService = canonicalItineraryService;
     }
 
     /**
@@ -96,7 +99,9 @@ public class PnrIngestionService {
             existing.setOnwardFlight(onwardFlight);
             existing.setHotelNote(hotelNote);
             existing.setAgency(agency);
+            existing.setItineraryVersion(existing.getItineraryVersion() != null ? existing.getItineraryVersion() + 1 : 2L);
             Booking updated = bookingRepository.save(existing);
+            canonicalItineraryService.normalizeAndPersistSegments(updated);
             auditService.logEvent(
                     "SYSTEM",
                     "PNR_UPDATED_IDEMPOTENT",
@@ -123,6 +128,7 @@ public class PnrIngestionService {
         );
 
         Booking saved = bookingRepository.save(booking);
+        canonicalItineraryService.normalizeAndPersistSegments(saved);
 
         auditService.logEvent(
                 "SYSTEM",

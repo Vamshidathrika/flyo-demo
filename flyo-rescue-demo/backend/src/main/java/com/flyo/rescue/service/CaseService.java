@@ -30,6 +30,7 @@ public class CaseService {
     private final PaymentSettlementService paymentSettlementService;
     private final CaseStateMachineService stateMachineService;
     private final FlightEvidenceReconciliationService reconciliationService;
+    private final CanonicalItineraryService canonicalItineraryService;
 
     public CaseService(RescueCaseRepository caseRepository,
                        BookingRepository bookingRepository,
@@ -41,7 +42,8 @@ public class CaseService {
                        MessageService messageService,
                        PaymentSettlementService paymentSettlementService,
                        CaseStateMachineService stateMachineService,
-                       FlightEvidenceReconciliationService reconciliationService) {
+                       FlightEvidenceReconciliationService reconciliationService,
+                       CanonicalItineraryService canonicalItineraryService) {
         this.caseRepository = caseRepository;
         this.bookingRepository = bookingRepository;
         this.optionRepository = optionRepository;
@@ -53,6 +55,7 @@ public class CaseService {
         this.paymentSettlementService = paymentSettlementService;
         this.stateMachineService = stateMachineService;
         this.reconciliationService = reconciliationService;
+        this.canonicalItineraryService = canonicalItineraryService;
     }
 
     private boolean isGlobalAdmin() {
@@ -93,41 +96,43 @@ public class CaseService {
         booking.setStatus("Cancelled");
         bookingRepository.save(booking);
 
-        // Idempotency guard: Return existing active case if present and not terminal
+        // Normalize and persist canonical segments
+        List<com.flyo.rescue.model.FlightSegment> segments = canonicalItineraryService.normalizeAndPersistSegments(booking);
+        com.flyo.rescue.model.FlightSegment primarySegment = segments.isEmpty() ? null : segments.get(0);
+
+        // Idempotency guard: Return existing active or completed case
         Optional<RescueCase> existingOpt = caseRepository.findFirstByBookingIdOrderByCreatedAtDesc(bookingId);
         if (existingOpt.isPresent()) {
             RescueCase existing = existingOpt.get();
-            boolean isTerminal = "DONE".equals(existing.getState())
-                    || "ESCALATED".equals(existing.getState())
-                    || "FAILED_ESCALATED".equals(existing.getState());
-            if (!isTerminal) {
+            // If already resolved (DONE) or in active lifecycle, preserve existing case state
+            if ("DONE".equals(existing.getState()) || (!"ESCALATED".equals(existing.getState()) && !"FAILED_ESCALATED".equals(existing.getState()))) {
                 return existing;
             }
         }
 
         String caseId = bookingId.equalsIgnoreCase("B1") ? "C1" : "CASE-" + bookingId;
-        String cancelledSegment = booking.getRoute() + " (" + booking.getFlight() + " " + booking.getDateTime() + ")";
+        String flNumber = primarySegment != null ? primarySegment.getFlightNumber() : booking.getFlight();
+        String flRoute = primarySegment != null ? primarySegment.getRoute() : booking.getRoute();
+        String flDept = primarySegment != null ? primarySegment.getScheduledDeparture() : booking.getDateTime();
+        String cancelledSegment = flRoute + " (" + flNumber + " " + flDept + ")";
         
-        String missedConnection = (booking.getOnwardFlight() != null && !booking.getOnwardFlight().equalsIgnoreCase("None"))
-                ? booking.getOnwardFlight()
-                : "None";
-
+        String missedConnection = booking.isMultiSegment() ? booking.getOnwardFlight() : "None";
         String hotelRisk = (booking.getHotelNote() != null && !booking.getHotelNote().equalsIgnoreCase("None"))
                 ? booking.getHotelNote()
                 : "None";
 
         String impactText;
-        if (!"None".equals(missedConnection) && !"None".equals(hotelRisk)) {
-            impactText = String.format(
-                    "Flight %s %s cancelled. Misses onward flight %s. %s is at risk.",
-                    booking.getFlight(), booking.getRoute(), missedConnection, hotelRisk
-            );
-        } else if (!"None".equals(missedConnection)) {
-            impactText = String.format("Flight %s %s cancelled. Misses onward connection: %s.",
-                    booking.getFlight(), booking.getRoute(), missedConnection);
+        if (booking.isMultiSegment()) {
+            if (!"None".equals(hotelRisk)) {
+                impactText = String.format("Flight %s %s cancelled. Misses onward flight %s. %s is at risk.",
+                        flNumber, flRoute, missedConnection, hotelRisk);
+            } else {
+                impactText = String.format("Flight %s %s cancelled. Misses onward connection: %s.",
+                        flNumber, flRoute, missedConnection);
+            }
         } else {
             impactText = String.format("Flight %s %s cancelled. Standalone trip disrupted.",
-                    booking.getFlight(), booking.getRoute());
+                    flNumber, flRoute);
         }
 
         RescueCase rescueCase = caseRepository.findById(caseId).orElse(
@@ -137,7 +142,7 @@ public class CaseService {
                         booking.getPassengerName(),
                         "DETECTED",
                         cancelledSegment,
-                        booking.getFlight(),
+                        flNumber,
                         impactText,
                         missedConnection,
                         hotelRisk
@@ -147,7 +152,19 @@ public class CaseService {
         rescueCase.setState("DETECTED");
         rescueCase.setTenantId(com.flyo.rescue.security.TenantContext.getTenantId());
         rescueCase.setCancelledSegment(cancelledSegment);
-        rescueCase.setFlight(booking.getFlight());
+        rescueCase.setFlight(flNumber);
+        rescueCase.setFlightNumber(flNumber);
+        rescueCase.setPassengerId(booking.getPassengerId());
+        rescueCase.setPnr(booking.getPnr());
+        rescueCase.setItineraryId(booking.getItineraryId());
+        rescueCase.setDisruptedSegmentId(primarySegment != null ? primarySegment.getId() : "SEG-" + booking.getId() + "-1");
+        rescueCase.setOriginAirport(primarySegment != null ? primarySegment.getOriginAirport() : booking.getOriginAirport());
+        rescueCase.setDestinationAirport(primarySegment != null ? primarySegment.getDestinationAirport() : booking.getDestinationAirport());
+        rescueCase.setScheduledDeparture(flDept);
+        rescueCase.setItineraryVersion(booking.getItineraryVersion());
+        rescueCase.setFinalDestination(booking.getFinalDestination());
+        rescueCase.setOnwardSegmentsCount(segments.size() > 1 ? (segments.size() - 1) : 0);
+        rescueCase.setMismatchReason(null);
         rescueCase.setImpact(impactText);
         rescueCase.setMissedConnection(missedConnection);
         rescueCase.setHotelRisk(hotelRisk);
@@ -159,22 +176,37 @@ public class CaseService {
         rescueCase.setManualNextStep(null);
 
         // Multi-Source Evidence Reconciliation (Radar + Open-Meteo Weather + News Intelligence)
-        String dep = "HYD";
-        String arr = "DEL";
-        if (booking.getRoute() != null && booking.getRoute().contains("→")) {
-            String[] parts = booking.getRoute().split("→");
-            dep = parts[0].trim();
-            arr = parts[1].trim();
-        }
+        String dep = rescueCase.getOriginAirport();
+        String arr = rescueCase.getDestinationAirport();
         com.flyo.rescue.dto.ReconciledFlightEvidence evidence = reconciliationService.reconcileDisruption(
-                booking.getFlight(), dep, arr, type, 0
+                flNumber, dep, arr, type, 0
         );
 
         rescueCase.setReconciledConfidence(evidence.getConfidencePercent());
         rescueCase.setDisruptionEvidence(evidence.getReconciledReason());
         rescueCase.setWeatherSummary(evidence.getWeatherSummary());
 
+        // Invalidate stale options in repository for this case
+        optionRepository.deleteAll(optionRepository.findByCaseIdOrderByRankAsc(caseId));
+
         RescueCase saved = caseRepository.save(rescueCase);
+
+        // Structured Audit Trail: Itinerary Resolved & Segment Validated
+        auditService.logEvent(
+                caseId,
+                "INCIDENT_ITINERARY_RESOLVED",
+                "Flyo Itinerary Service",
+                String.format("Itinerary %s (v%d) resolved for passenger %s (PNR %s).",
+                        booking.getItineraryId(), booking.getItineraryVersion(), booking.getPassengerName(), booking.getPnr())
+        );
+
+        auditService.logEvent(
+                caseId,
+                "INCIDENT_SEGMENT_VALIDATED",
+                "Flyo Itinerary Service",
+                String.format("Disrupted segment %s (%s %s) validated. Final destination: %s.",
+                        rescueCase.getDisruptedSegmentId(), flNumber, flRoute, rescueCase.getFinalDestination())
+        );
 
         // Audit Trail: Disruption Detected
         auditService.logEvent(
@@ -182,7 +214,7 @@ public class CaseService {
                 "DISRUPTION_DETECTED",
                 "Flyo Engine",
                 String.format("Flight %s %s cancelled. Disruption detected for passenger %s (PNR %s).",
-                        booking.getFlight(), booking.getRoute(), booking.getPassengerName(), booking.getPnr())
+                        flNumber, flRoute, booking.getPassengerName(), booking.getPnr())
         );
 
         // Audit Trail: Evidence Reconciled
@@ -198,7 +230,7 @@ public class CaseService {
         messageService.sendPassengerReassuranceNotice(
                 caseId,
                 booking.getPassengerName(),
-                booking.getFlight(),
+                flNumber,
                 "FL301",
                 missedConnection
         );
@@ -219,14 +251,38 @@ public class CaseService {
         RescueCase rescueCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
+        if (CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
+            throw new IllegalStateTransitionException("409 Conflict: Case " + caseId + " is in DATA_RECONCILIATION_REQUIRED. Options generation blocked.");
+        }
+
         Booking booking = bookingRepository.findById(rescueCase.getBookingId()).orElse(null);
-        List<RebookOption> rawOptions;
-        if (booking != null) {
-            rawOptions = flightSearchService.findCandidateOptions(caseId, booking);
-        } else {
-            org.slf4j.LoggerFactory.getLogger(CaseService.class)
-                    .warn("[CaseService] Underlying booking not found for case {}. Returning zero candidate options.", caseId);
-            rawOptions = List.of();
+        if (booking == null) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, "Underlying booking missing for case: " + caseId);
+            return List.of();
+        }
+
+        canonicalItineraryService.normalizeAndPersistSegments(booking);
+        Optional<com.flyo.rescue.model.FlightSegment> segOpt = canonicalItineraryService.resolveDisruptedSegment(
+                booking, rescueCase.getFlightNumber(), rescueCase.getOriginAirport(), rescueCase.getDestinationAirport());
+        if (segOpt.isEmpty()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, "Disrupted flight segment mismatch: " + rescueCase.getFlightNumber());
+            return List.of();
+        }
+
+        com.flyo.rescue.model.FlightSegment segment = segOpt.get();
+        var validation = canonicalItineraryService.validateItineraryIntegrity(rescueCase, booking, segment);
+        if (!validation.isValid()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, validation.mismatchReason());
+            return List.of();
+        }
+
+        List<RebookOption> rawOptions = flightSearchService.findCandidateOptions(caseId, booking, segment, rescueCase.getFinalDestination());
+        for (RebookOption opt : rawOptions) {
+            var optVal = canonicalItineraryService.validateOptionRoute(rescueCase, booking, opt);
+            if (!optVal.isValid()) {
+                canonicalItineraryService.flagReconciliationRequired(rescueCase, optVal.mismatchReason());
+                return List.of();
+            }
         }
 
         List<RebookOption> rankedOptions = rankingEngine.rankOptions(rawOptions, rescueCase.getMissedConnection());
@@ -265,9 +321,51 @@ public class CaseService {
     }
 
     public List<RebookOption> getOptionsForCase(String caseId) {
+        RescueCase rescueCase = caseRepository.findById(caseId).orElse(null);
+        if (rescueCase == null) return List.of();
+
+        if (CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
+            org.slf4j.LoggerFactory.getLogger(CaseService.class)
+                    .warn("[CaseService] Case {} in DATA_RECONCILIATION_REQUIRED. Options blocked.", caseId);
+            return List.of();
+        }
+
         List<RebookOption> options = optionRepository.findByCaseIdOrderByRankAsc(caseId);
-        if (options.isEmpty()) {
+        boolean optionsValid = !options.isEmpty();
+        Booking booking = bookingRepository.findById(rescueCase.getBookingId()).orElse(null);
+
+        if (optionsValid) {
+            if (booking == null) {
+                optionsValid = false;
+            } else {
+                for (RebookOption opt : options) {
+                    if (opt.getItineraryVersion() != null && !opt.getItineraryVersion().equals(booking.getItineraryVersion())) {
+                        optionsValid = false;
+                        break;
+                    }
+                    if (opt.getSourceSegmentId() != null && rescueCase.getDisruptedSegmentId() != null
+                            && !opt.getSourceSegmentId().equals(rescueCase.getDisruptedSegmentId())) {
+                        optionsValid = false;
+                        break;
+                    }
+                    var optVal = canonicalItineraryService.validateOptionRoute(rescueCase, booking, opt);
+                    if (!optVal.isValid()) {
+                        optionsValid = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!optionsValid) {
+            if (!options.isEmpty()) {
+                optionRepository.deleteAll(options);
+                auditService.logEvent(caseId, "RECOVERY_OPTIONS_INVALIDATED", "Flyo Cache Engine", "Stale/mismatched options evicted from cache.");
+            }
             options = generateAndRankOptions(caseId);
+            if (!options.isEmpty()) {
+                auditService.logEvent(caseId, "RECOVERY_OPTIONS_REGENERATED", "Flyo Cache Engine", "Fresh options generated matching verified itinerary.");
+            }
         } else {
             caseRepository.findById(caseId).ifPresent(c -> {
                 if ("DETECTED".equals(c.getState())) {
@@ -283,6 +381,10 @@ public class CaseService {
     public RescueCase approveOption(String caseId, String optionId, String approvedBy) {
         RescueCase rescueCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        if (CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
+            throw new IllegalStateTransitionException("409 Conflict: Cannot approve option on a case in DATA_RECONCILIATION_REQUIRED. Reconciliation required.");
+        }
 
         // State Machine Guard: Cannot approve if case is in an escalated or terminal state
         if ("ESCALATED".equals(rescueCase.getState())) {
@@ -306,20 +408,37 @@ public class CaseService {
                     caseId, rescueCase.getApprovedOptionId(), optionId));
         }
 
+        // Server-Side Phase 6 Approval Revalidation
+        Booking booking = bookingRepository.findById(rescueCase.getBookingId()).orElse(null);
+        if (booking == null) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, "Underlying booking missing at approval time");
+            auditService.logEvent(caseId, "APPROVAL_REVALIDATION_FAILED", approvedBy, "Booking missing at approval time.");
+            throw new IllegalStateTransitionException("409 Conflict: Itinerary revalidation failed: booking missing.");
+        }
+        var segOpt = canonicalItineraryService.resolveDisruptedSegment(booking, rescueCase.getFlightNumber(), rescueCase.getOriginAirport(), rescueCase.getDestinationAirport());
+        if (segOpt.isEmpty()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, "Segment identity mismatch at approval time");
+            auditService.logEvent(caseId, "APPROVAL_REVALIDATION_FAILED", approvedBy, "Segment identity mismatch.");
+            throw new IllegalStateTransitionException("409 Conflict: Itinerary revalidation failed: segment mismatch.");
+        }
+        var validation = canonicalItineraryService.validateItineraryIntegrity(rescueCase, booking, segOpt.get());
+        if (!validation.isValid()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, validation.mismatchReason());
+            auditService.logEvent(caseId, "APPROVAL_REVALIDATION_FAILED", approvedBy, validation.mismatchReason());
+            throw new IllegalStateTransitionException("409 Conflict: Itinerary revalidation failed: " + validation.mismatchReason());
+        }
+
         RebookOption option = optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
                 .filter(o -> o.getId().equals(optionId) || o.getId().equals(caseId + "-" + optionId) || o.getId().endsWith("-" + optionId))
                 .findFirst()
-                .orElseGet(() -> optionRepository.findById(optionId)
-                        .orElseGet(() -> {
-                            if (optionRepository.findByCaseIdOrderByRankAsc(caseId).isEmpty()) {
-                                generateAndRankOptions(caseId);
-                            }
-                            return optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
-                                    .filter(o -> o.getId().equals(optionId) || o.getId().equals(caseId + "-" + optionId) || o.getId().endsWith("-" + optionId))
-                                    .findFirst()
-                                    .orElseGet(() -> optionRepository.findById(optionId)
-                                            .orElseThrow(() -> new IllegalArgumentException("Invalid optionId: " + optionId)));
-                        }));
+                .orElseThrow(() -> new IllegalArgumentException("Invalid optionId: " + optionId + " does not belong to case " + caseId));
+
+        var optVal = canonicalItineraryService.validateOptionRoute(rescueCase, booking, option);
+        if (!optVal.isValid()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, optVal.mismatchReason());
+            auditService.logEvent(caseId, "APPROVAL_REVALIDATION_FAILED", approvedBy, optVal.mismatchReason());
+            throw new IllegalStateTransitionException("409 Conflict: Option route validation failed: " + optVal.mismatchReason());
+        }
 
         rescueCase.setApprovedOptionId(option.getId());
         rescueCase.setApprovedBy(approvedBy != null && !approvedBy.isBlank() ? approvedBy : "Flyo Operator");
@@ -389,6 +508,10 @@ public class CaseService {
             return rescueCase;
         }
 
+        if (CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED.equals(rescueCase.getState())) {
+            throw new ApprovalRequiredException("403 Forbidden: Case is in DATA_RECONCILIATION_REQUIRED. Rebooking blocked.");
+        }
+
         if (!CaseStateMachineService.STATE_APPROVED.equals(rescueCase.getState())) {
             throw new ApprovalRequiredException("403 Forbidden: Rebooking requires prior explicit human approval in APPROVED state. Current state: " + rescueCase.getState());
         }
@@ -401,17 +524,38 @@ public class CaseService {
             throw new ApprovalRequiredException("403 Forbidden: Case is escalated. Cannot rebook without a new approved option.");
         }
 
-        RebookOption approvedOption = optionRepository.findById(rescueCase.getApprovedOptionId())
-                .orElseGet(() -> optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
-                        .filter(o -> o.getId().equals(rescueCase.getApprovedOptionId())
-                                || o.getId().equals(caseId + "-" + rescueCase.getApprovedOptionId())
-                                || o.getId().endsWith("-" + rescueCase.getApprovedOptionId()))
-                        .findFirst()
-                        .orElseGet(() -> {
-                            generateAndRankOptions(caseId);
-                            return optionRepository.findById(rescueCase.getApprovedOptionId())
-                                    .orElseThrow(() -> new IllegalArgumentException("Approved option not found: " + rescueCase.getApprovedOptionId()));
-                        }));
+        RebookOption approvedOption = optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
+                .filter(o -> o.getId().equals(rescueCase.getApprovedOptionId())
+                        || o.getId().equals(caseId + "-" + rescueCase.getApprovedOptionId())
+                        || o.getId().endsWith("-" + rescueCase.getApprovedOptionId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Approved option not found: " + rescueCase.getApprovedOptionId()));
+
+        // Phase 6 Server-Side Execution Revalidation
+        Booking booking = bookingRepository.findById(rescueCase.getBookingId()).orElse(null);
+        if (booking == null) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, "Underlying booking missing at rebooking time");
+            auditService.logEvent(caseId, "EXECUTION_IDENTITY_VALIDATION_FAILED", "Flyo Rebook Engine", "Booking missing at rebooking time.");
+            throw new IllegalStateTransitionException("409 Conflict: Execution halted: booking missing.");
+        }
+        var segOpt = canonicalItineraryService.resolveDisruptedSegment(booking, rescueCase.getFlightNumber(), rescueCase.getOriginAirport(), rescueCase.getDestinationAirport());
+        if (segOpt.isEmpty()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, "Disrupted flight segment mismatch at rebooking time");
+            auditService.logEvent(caseId, "EXECUTION_IDENTITY_VALIDATION_FAILED", "Flyo Rebook Engine", "Segment mismatch.");
+            throw new IllegalStateTransitionException("409 Conflict: Execution halted: segment mismatch.");
+        }
+        var validation = canonicalItineraryService.validateItineraryIntegrity(rescueCase, booking, segOpt.get());
+        if (!validation.isValid()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, validation.mismatchReason());
+            auditService.logEvent(caseId, "EXECUTION_IDENTITY_VALIDATION_FAILED", "Flyo Rebook Engine", validation.mismatchReason());
+            throw new IllegalStateTransitionException("409 Conflict: Execution halted: " + validation.mismatchReason());
+        }
+        var optVal = canonicalItineraryService.validateOptionRoute(rescueCase, booking, approvedOption);
+        if (!optVal.isValid()) {
+            canonicalItineraryService.flagReconciliationRequired(rescueCase, optVal.mismatchReason());
+            auditService.logEvent(caseId, "EXECUTION_IDENTITY_VALIDATION_FAILED", "Flyo Rebook Engine", optVal.mismatchReason());
+            throw new IllegalStateTransitionException("409 Conflict: Execution halted: option route mismatch: " + optVal.mismatchReason());
+        }
 
         stateMachineService.transition(rescueCase, CaseStateMachineService.STATE_REBOOKING, "Flyo Rebook Engine", "Subprocess dispatched to Playwright browser worker");
         caseRepository.save(rescueCase);
@@ -538,5 +682,12 @@ public class CaseService {
         }
 
         return caseRepository.save(rescueCase);
+    }
+
+    @Transactional
+    public RescueCase reconcileCase(String caseId, String operator) {
+        RescueCase c = canonicalItineraryService.reconcileCase(caseId, operator);
+        generateAndRankOptions(caseId);
+        return c;
     }
 }
