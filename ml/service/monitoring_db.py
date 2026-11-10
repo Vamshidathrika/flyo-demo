@@ -407,6 +407,8 @@ class MonitoringDB:
         alert_id = str(uuid.uuid4())
         now_utc = datetime.now(timezone.utc).isoformat()
         with self._get_connection() as conn:
+            # Deactivate previous active alerts for the same category to avoid duplicate alert flooding
+            conn.execute("UPDATE model_alerts SET is_active = 0 WHERE category = ? AND is_active = 1", (category,))
             conn.execute("""
             INSERT INTO model_alerts (
                 alert_id, created_at_utc, category, severity, metric_name,
@@ -421,7 +423,16 @@ class MonitoringDB:
             rows = conn.execute("""
             SELECT * FROM model_alerts WHERE is_active = 1 ORDER BY created_at_utc DESC LIMIT ?
             """, (limit,)).fetchall()
-            return [dict(r) for r in rows]
+            # Deduplicate by category so consumers receive at most one active alert per domain
+            seen_categories = set()
+            unique_alerts = []
+            for r in rows:
+                d = dict(r)
+                cat = d.get("category")
+                if cat not in seen_categories:
+                    seen_categories.add(cat)
+                    unique_alerts.append(d)
+            return unique_alerts
 
     def clear_active_alerts(self):
         with self._get_connection() as conn:

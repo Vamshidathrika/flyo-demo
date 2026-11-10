@@ -201,13 +201,14 @@ public class PassengerRescueWorkflowService {
         String btn = buttonId != null ? buttonId.toUpperCase().trim() : "";
         String msg = text != null ? text.toUpperCase().trim() : "";
 
-        if (btn.startsWith("RESCUE_MY_TRIP") || btn.startsWith("ABANDON_RESCUE")
+        if (btn.startsWith("RESCUE_MY_TRIP") || btn.startsWith("RESCUEMYTRIP")
+                || btn.startsWith("ABANDON_RESCUE") || btn.startsWith("ABANDONRESCUE")
                 || btn.startsWith("SELECT_OPTION_") || btn.startsWith("VERIFY_PASSENGER_OTP_")) {
             return true;
         }
 
-        if (msg.equals("RESCUE") || msg.equals("RESCUE MY TRIP") || msg.equals("RESCUE_MY_TRIP")
-                || msg.equals("ABANDON") || msg.equals("ABANDON RESCUE") || msg.equals("ABANDON_RESCUE")
+        if (msg.equals("RESCUE") || msg.equals("RESCUE MY TRIP") || msg.equals("RESCUE_MY_TRIP") || msg.equals("RESCUEMYTRIP")
+                || msg.equals("ABANDON") || msg.equals("ABANDON RESCUE") || msg.equals("ABANDON_RESCUE") || msg.equals("ABANDONRESCUE")
                 || msg.startsWith("SELECT OPTION") || msg.startsWith("OPTION ")
                 || msg.matches("^[0-9]{6}$")) {
             return true;
@@ -232,13 +233,15 @@ public class PassengerRescueWorkflowService {
         String msg = text != null ? text.trim() : "";
 
         // Button: RESCUE MY TRIP
-        if (btn.startsWith("RESCUE_MY_TRIP") || msg.equalsIgnoreCase("RESCUE") || msg.equalsIgnoreCase("RESCUE MY TRIP")) {
+        if (btn.startsWith("RESCUE_MY_TRIP") || btn.startsWith("RESCUEMYTRIP")
+                || msg.equalsIgnoreCase("RESCUE") || msg.equalsIgnoreCase("RESCUE MY TRIP") || msg.equalsIgnoreCase("RESCUEMYTRIP")) {
             String caseId = extractCaseIdFromToken(btn, null);
             return handleRescueMyTrip(phone, caseId);
         }
 
         // Button: ABANDON RESCUE
-        if (btn.startsWith("ABANDON_RESCUE") || msg.equalsIgnoreCase("ABANDON") || msg.equalsIgnoreCase("ABANDON RESCUE")) {
+        if (btn.startsWith("ABANDON_RESCUE") || btn.startsWith("ABANDONRESCUE")
+                || msg.equalsIgnoreCase("ABANDON") || msg.equalsIgnoreCase("ABANDON RESCUE") || msg.equalsIgnoreCase("ABANDONRESCUE")) {
             String caseId = extractCaseIdFromToken(btn, null);
             return handleAbandonRescue(phone, caseId);
         }

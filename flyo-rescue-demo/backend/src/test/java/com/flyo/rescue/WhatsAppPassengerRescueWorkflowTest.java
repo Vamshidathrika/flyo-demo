@@ -570,6 +570,27 @@ public class WhatsAppPassengerRescueWorkflowTest {
     }
 
     @Test
+    @DisplayName("Scenario Q: Passenger taps [RESCUE MY TRIP] when Case is already in OPTIONS_READY without 409 conflict")
+    void testScenarioQ_RescueMyTripWhenCaseAlreadyInOptionsReady() {
+        RescueCase c = cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
+        // Transition to OPTIONS_READY (e.g. operator or background engine generated/ready options)
+        stateMachineService.transition(c, CaseStateMachineService.STATE_OPTIONS_READY, "Flyo Operator", "Options generated and ranked on dashboard");
+        rescueCaseRepository.save(c);
+
+        RescueCase inOptionsReady = rescueCaseRepository.findById(c.getId()).orElseThrow();
+        assertEquals(CaseStateMachineService.STATE_OPTIONS_READY, inOptionsReady.getState());
+
+        // Passenger clicks [RESCUE MY TRIP]
+        String reply = passengerWorkflow.processPassengerInbound(ANANYA_PHONE, null, "RESCUE_MY_TRIP_" + c.getId());
+        assertNotNull(reply);
+        assertFalse(reply.contains("409 Conflict"), "Must not encounter 409 Conflict when clicking RESCUE MY TRIP in OPTIONS_READY state");
+        assertTrue(reply.contains("alternative flights") || reply.contains("FL301") || reply.contains("FL201") || reply.contains("FL101"));
+
+        RescueCase afterRescue = rescueCaseRepository.findById(c.getId()).orElseThrow();
+        assertEquals(CaseStateMachineService.STATE_AWAITING_OPTION_SELECTION, afterRescue.getState());
+    }
+
+    @Test
     @DisplayName("Scenario E2: OTP Expiry (>10 min) invalidates challenge, regenerates fresh OTP, and allows recovery")
     void testScenarioE2_OtpExpiryRegeneratesChallengeAndPromptsRetry() {
         cancellationNotificationService.handleFlightCancellation("B1", "Flight Cancelled", "FlightRadar24");
