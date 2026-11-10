@@ -4,7 +4,7 @@ category: resilience
 tier: distributed-coordination
 description: Verify distributed saga orchestrator recovers cleanly from worker crashes, expired leases, uncertain provider outcomes, and application restarts without blind retries.
 repo: .
-commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+commit: HEAD
 timeout: 300
 max_changes: 20
 

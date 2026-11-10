@@ -4,7 +4,7 @@ category: robustness
 tier: domain-parsers
 description: Robust PNR ingestion and parsing across complex GDS formats, multi-passenger bookings, multi-segment connections, overnight flights, and malformed messages without synthetic flight fabrication.
 repo: .
-commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+commit: HEAD
 timeout: 240
 max_changes: 15
 

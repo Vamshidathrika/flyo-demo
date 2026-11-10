@@ -4,7 +4,7 @@ category: security
 tier: fail-closed-integrations
 description: Verify that production configuration rejects mock/demo adapters and fails closed with explicit blocked states upon missing credentials without fabricated responses.
 repo: .
-commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+commit: HEAD
 timeout: 240
 max_changes: 15
 

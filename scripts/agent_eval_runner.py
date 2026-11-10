@@ -91,10 +91,12 @@ class AgentEvalRunner:
 
     def _resolve_commit(self, task_commit: Optional[str]) -> str:
         if task_commit and task_commit != "HEAD":
-            cmd = ["git", "rev-parse", task_commit]
-        else:
-            cmd = ["git", "rev-parse", "HEAD"]
-        res = subprocess.run(cmd, cwd=self.repo_root, capture_output=True, text=True, check=True)
+            try:
+                res = subprocess.run(["git", "rev-parse", task_commit], cwd=self.repo_root, capture_output=True, text=True, check=True)
+                return res.stdout.strip()
+            except subprocess.CalledProcessError:
+                pass
+        res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True)
         return res.stdout.strip()
 
     def _create_worktree(self, branch_name: str, worktree_path: Path, commit_sha: str):

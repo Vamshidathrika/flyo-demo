@@ -4,7 +4,7 @@ category: correctness
 tier: distributed-safety
 description: Ensure booking execution, payment settlement, and webhook ingestion are strictly idempotent under concurrent and duplicate requests without duplicate orders or double-charges.
 repo: .
-commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+commit: HEAD
 timeout: 300
 max_changes: 20
 

@@ -4,7 +4,7 @@ category: intelligence
 tier: predictive-safety
 description: Ensure ML inference microservice maintains model artifact integrity, strict SHA-256 checksums, unsupported corridor fail-safe handling, and zero data leakage across chronological datasets.
 repo: .
-commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+commit: HEAD
 timeout: 180
 max_changes: 15
 

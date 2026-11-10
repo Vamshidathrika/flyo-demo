@@ -4,7 +4,7 @@ category: security
 tier: enterprise-multi-tenancy
 description: Enforce impenetrable tenant boundaries preventing cross-tenant data reads, case updates, payment modifications, or header spoofing across airline operators.
 repo: .
-commit: ca813189d5988e0bacff45724fa7b76791abf8c2
+commit: HEAD
 timeout: 240
 max_changes: 15
 
