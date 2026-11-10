@@ -1,8 +1,8 @@
 let currentActiveCase = null;
 let lastChatCount = 0;
 let currentActiveView = "monitor";
-let authToken = localStorage.getItem("flyo_jwt_token");
-let currentOperator = JSON.parse(localStorage.getItem("flyo_operator") || "null");
+let authToken = typeof localStorage !== "undefined" ? localStorage.getItem("flyo_jwt_token") : null;
+let currentOperator = typeof localStorage !== "undefined" ? JSON.parse(localStorage.getItem("flyo_operator") || "null") : null;
 
 async function autoLoginDemoUser() {
     try {
@@ -19,8 +19,10 @@ async function autoLoginDemoUser() {
                     fullName: data.fullName || "System Admin",
                     roles: data.roles || ["ROLE_ADMIN"]
                 };
-                localStorage.setItem("flyo_jwt_token", authToken);
-                localStorage.setItem("flyo_operator", JSON.stringify(currentOperator));
+                if (typeof localStorage !== "undefined") {
+                    localStorage.setItem("flyo_jwt_token", authToken);
+                    localStorage.setItem("flyo_operator", JSON.stringify(currentOperator));
+                }
                 updateOperatorBadgeUI();
                 return true;
             }
@@ -72,9 +74,27 @@ async function apiFetch(url, options = {}) {
     return res;
 }
 
+function toggleOperatorDrawer() {
+    const drawer = document.getElementById("operator-drawer");
+    const overlay = document.getElementById("operator-drawer-overlay");
+    if (!drawer) return;
+    const isOpen = drawer.classList.contains("open");
+    if (isOpen) {
+        drawer.classList.remove("open");
+        if (overlay) overlay.classList.remove("open");
+    } else {
+        drawer.classList.add("open");
+        if (overlay) overlay.classList.add("open");
+        fetchWhatsAppOperatorChat(true);
+    }
+}
+
 function switchSectionView(tabName) {
+    if (tabName === "msg") {
+        tabName = "ananya";
+    }
     currentActiveView = tabName;
-    const tabs = ["monitor", "ananya", "msg", "logs", "monitoring", "ops"];
+    const tabs = ["monitor", "ananya", "logs", "monitoring", "ops"];
     tabs.forEach(t => {
         const view = document.getElementById(`view-${t}`);
         const btn = document.getElementById(`tab-${t}`);
@@ -99,8 +119,9 @@ function switchSectionView(tabName) {
     const activeId = currentActiveCase ? currentActiveCase.id : "C1";
     if (tabName === "logs") {
         fetchAudit(activeId);
-    } else if (tabName === "msg") {
+    } else if (tabName === "ananya") {
         fetchMessages(activeId);
+        fetchOptions(activeId);
     } else if (tabName === "monitor") {
         fetchBookings();
     } else if (tabName === "monitoring") {
@@ -110,19 +131,21 @@ function switchSectionView(tabName) {
     }
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-    updateOperatorBadgeUI();
-    if (!authToken) {
-        await autoLoginDemoUser();
-    }
-    fetchBookings();
-    fetchActiveCases();
-    fetchWhatsAppOperatorChat();
-    fetchOtpStatus();
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    document.addEventListener("DOMContentLoaded", async () => {
+        updateOperatorBadgeUI();
+        if (!authToken) {
+            await autoLoginDemoUser();
+        }
+        fetchBookings();
+        fetchActiveCases();
+        fetchWhatsAppOperatorChat();
+        fetchOtpStatus();
 
-    // Live Polling every 2.0 seconds to keep Dashboard & WhatsApp strictly in sync
-    setInterval(syncDashboard, 2000);
-});
+        // Live Polling every 2.0 seconds to keep Dashboard & WhatsApp strictly in sync
+        setInterval(syncDashboard, 2000);
+    });
+}
 
 async function syncDashboard() {
     await fetchActiveCases(true);
@@ -1174,10 +1197,173 @@ function renderOptions(options) {
     }).join("");
 }
 
+let currentRawBookings = [];
+
+function getAirlineName(flightCode) {
+    if (!flightCode) return "Commercial Carrier";
+    const prefix = flightCode.substring(0, 2).toUpperCase();
+    switch (prefix) {
+        case "AI": return "Air India";
+        case "6E": return "IndiGo";
+        case "UK": return "Vistara";
+        case "SG": return "SpiceJet";
+        case "G8": return "Go First";
+        case "QP": return "Akasa Air";
+        case "UA": return "United Airlines";
+        case "AC": return "Air Canada";
+        case "BA": return "British Airways";
+        case "LH": return "Lufthansa";
+        case "EK": return "Emirates";
+        default: return "Partner Carrier";
+    }
+}
+
+function handleFlightFilterChange() {
+    if (currentRawBookings && currentRawBookings.length > 0) {
+        renderFilteredBookings();
+    }
+}
+
+function resetFlightFilters() {
+    const searchInp = document.getElementById("flight-search-input");
+    const statusSel = document.getElementById("filter-status-select");
+    const severitySel = document.getElementById("filter-severity-select");
+    const airlineSel = document.getElementById("filter-airline-select");
+    if (searchInp) searchInp.value = "";
+    if (statusSel) statusSel.value = "ALL";
+    if (severitySel) severitySel.value = "ALL";
+    if (airlineSel) airlineSel.value = "ALL";
+    renderFilteredBookings();
+}
+
+function renderFilteredBookings() {
+    const tbody = document.getElementById("bookings-tbody");
+    if (!tbody || !currentRawBookings) return;
+
+    const searchInp = document.getElementById("flight-search-input");
+    const statusSel = document.getElementById("filter-status-select");
+    const severitySel = document.getElementById("filter-severity-select");
+    const airlineSel = document.getElementById("filter-airline-select");
+
+    const searchVal = searchInp ? searchInp.value.trim().toLowerCase() : "";
+    const statusVal = statusSel ? statusSel.value : "ALL";
+    const severityVal = severitySel ? severitySel.value : "ALL";
+    const airlineVal = airlineSel ? airlineSel.value : "ALL";
+
+    const filtered = currentRawBookings.filter(b => {
+        const isBlocked = b.status === "Cancelled" || b.status === "Disrupted" || b.status === "Blocked";
+        const isRescued = b.status === "Rescued" || b.status === "DONE" || b.status === "Protected";
+        const hasOnward = b.onwardFlight && b.onwardFlight !== 'None';
+        const airline = getAirlineName(b.flight);
+
+        // Search text
+        if (searchVal) {
+            const match = (b.flight && b.flight.toLowerCase().includes(searchVal)) ||
+                          (b.pnr && b.pnr.toLowerCase().includes(searchVal)) ||
+                          (b.passengerName && b.passengerName.toLowerCase().includes(searchVal)) ||
+                          (b.route && b.route.toLowerCase().includes(searchVal));
+            if (!match) return false;
+        }
+
+        // Status filter
+        if (statusVal === "DISRUPTED" && !isBlocked) return false;
+        if (statusVal === "MONITORED" && (isBlocked || isRescued)) return false;
+        if (statusVal === "RESCUED" && !isRescued) return false;
+
+        // Severity filter
+        if (severityVal === "CRITICAL" && !(isBlocked && hasOnward)) return false;
+        if (severityVal === "ELEVATED" && !(isBlocked && !hasOnward)) return false;
+        if (severityVal === "NORMAL" && isBlocked) return false;
+
+        // Airline filter
+        if (airlineVal !== "ALL" && !airline.toLowerCase().includes(airlineVal.toLowerCase())) return false;
+
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" class="empty-state" style="text-align: center; padding: 2rem; color: #64748b;">No flights match active filter criteria. Click "Reset Filters" to view full manifest.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(b => {
+        const isBlocked = b.status === "Cancelled" || b.status === "Disrupted" || b.status === "Blocked";
+        const isRescued = b.status === "Rescued" || b.status === "DONE" || b.status === "Protected";
+        const isHero = b.id === "B1";
+        const airline = getAirlineName(b.flight);
+        const hasOnward = b.onwardFlight && b.onwardFlight !== 'None';
+
+        let rowClass = "";
+        if (isBlocked) rowClass = "hero-row blocked-row";
+        else if (isRescued) rowClass = "rescued-row";
+        else if (isHero) rowClass = "hero-row";
+
+        let flightDisplay = "";
+        if (isBlocked) {
+            flightDisplay = `<span style="text-decoration: line-through; color: #dc2626; font-weight: 750;">${escapeHtml(b.flight)}</span> <span class="badge-blocked-tag">DISRUPTED</span>`;
+        } else {
+            flightDisplay = `<strong>${escapeHtml(b.flight)}</strong>`;
+        }
+
+        let statusDisplay = "";
+        if (isBlocked) {
+            statusDisplay = `<span class="badge badge-cancelled" style="background:#fee2e2; color:#b91c1c; font-weight:750; border:1px solid #f87171;">DISRUPTED</span>`;
+        } else if (isRescued) {
+            statusDisplay = `<span class="badge" style="background:#dcfce7; color:#15803d; font-weight:750; border:1px solid #86efac;">RECOVERED</span>`;
+        } else {
+            statusDisplay = `<span class="badge badge-on-time" style="background:#f0fdf4; color:#15803d; font-weight:600;">MONITORED</span>`;
+        }
+
+        let severityDisplay = "";
+        if (isBlocked && hasOnward) {
+            severityDisplay = `<span class="badge" style="background:#fef2f2; color:#dc2626; font-weight:800; border:1px solid #fca5a5;">CRITICAL (MCT)</span>`;
+        } else if (isBlocked) {
+            severityDisplay = `<span class="badge" style="background:#fffbeb; color:#b45309; font-weight:750; border:1px solid #fde68a;">ELEVATED</span>`;
+        } else {
+            severityDisplay = `<span class="badge" style="background:#f8fafc; color:#475569; font-weight:600; border:1px solid #e2e8f0;">NORMAL</span>`;
+        }
+
+        let actionBtn = "";
+        if (isBlocked) {
+            actionBtn = `<button class="btn btn-primary btn-sm" onclick="openCaseForBooking('${escapeHtml(b.id)}')" style="font-weight: 750; background:#2563eb; color:white; font-size:0.75rem; padding:0.3rem 0.6rem;">Inspect Recovery &rarr;</button>`;
+        } else if (isRescued) {
+            actionBtn = `<button class="btn btn-secondary btn-sm" onclick="openCaseForBooking('${escapeHtml(b.id)}')" style="font-size:0.75rem; padding:0.3rem 0.6rem;">View Recovery &rarr;</button>`;
+        } else {
+            actionBtn = `<button class="btn btn-outline-danger btn-sm" onclick="simulateCancellation('${escapeHtml(b.id)}')" style="font-size:0.72rem; padding:0.25rem 0.5rem;" title="Simulate Disruption Radar Alert">Simulate Radar Alert</button>`;
+        }
+
+        return `
+            <tr class="${rowClass}">
+                <td>${flightDisplay}</td>
+                <td><span style="font-weight:600; color:#1e293b;">${escapeHtml(airline)}</span></td>
+                <td><span class="route-tag" style="font-family:monospace; font-weight:700;">${escapeHtml(b.route)}</span></td>
+                <td>${escapeHtml(b.dateTime)}</td>
+                <td>${isBlocked ? '<span style="color:#dc2626; font-weight:750;">CANCELLED</span>' : (isRescued ? '<span style="color:#16a34a; font-weight:700;">Re-scheduled</span>' : '<span style="color:#059669; font-weight:600;">On Schedule</span>')}</td>
+                <td>${statusDisplay}</td>
+                <td><strong>${escapeHtml(b.passengerName)}</strong><br><span style="font-size:0.75rem; color:#64748b;">PNR: <span class="pnr-tag">${escapeHtml(b.pnr)}</span></span></td>
+                <td>
+                    ${hasOnward 
+                        ? `<span class="highlight-text" style="font-size:0.8rem; font-weight:700; color:#b45309;">${escapeHtml(b.onwardFlight)}</span><br><span style="font-size:0.72rem; color:#dc2626; font-weight:600;">MCT Threshold: 120m</span>` 
+                        : '<span style="color:#94a3b8; font-size:0.8rem;">Direct / Point-to-Point</span>'}
+                </td>
+                <td>${severityDisplay}</td>
+                <td><span style="font-size:0.75rem; color:#64748b;">Live &middot; Radar Webhook</span></td>
+                <td>
+                    <div style="display: flex; gap: 0.35rem; align-items: center;">
+                        ${actionBtn}
+                        ${!isHero ? `<button class="btn btn-secondary btn-sm" onclick="deleteBookingPrompt('${escapeHtml(b.id)}')" style="padding: 0.2rem 0.45rem; font-size: 0.75rem;" title="Delete">&times;</button>` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join("");
+}
+
 function renderBookings(bookings) {
+    currentRawBookings = bookings || [];
     const tbody = document.getElementById("bookings-tbody");
     if (!bookings || bookings.length === 0) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="empty-state" style="text-align: center; padding: 2rem; color: #64748b;">No bookings found. Click <strong>"＋ Add Booking"</strong> above to enter your own custom passengers!</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="empty-state" style="text-align: center; padding: 2rem; color: #64748b;">No bookings found. Click <strong>"＋ Add Booking"</strong> above to enter your own custom passengers!</td></tr>`;
         const heroCallout = document.getElementById("hero-callout");
         if (heroCallout) heroCallout.style.display = "none";
         const countEl = document.getElementById("monitored-count");
@@ -1309,74 +1495,7 @@ function renderBookings(bookings) {
         return a.id.localeCompare(b.id);
     });
 
-    if (tbody) {
-        tbody.innerHTML = bookings.map(b => {
-            const isBlocked = b.status === "Cancelled" || b.status === "Disrupted" || b.status === "Blocked";
-            const isRescued = b.status === "Rescued" || b.status === "DONE" || b.status === "Protected";
-            const isHero = b.id === "B1";
-
-            let rowClass = "";
-            if (isBlocked) rowClass = "hero-row blocked-row";
-            else if (isRescued) rowClass = "rescued-row";
-            else if (isHero) rowClass = "hero-row";
-
-            let flightDisplay = "";
-            if (isBlocked) {
-                flightDisplay = `<span style="text-decoration: line-through; color: #dc2626; font-weight: 700;">${escapeHtml(b.flight)}</span> <span class="badge-blocked-tag">BLOCKED</span>`;
-            } else {
-                flightDisplay = `<strong>${escapeHtml(b.flight)}</strong>`;
-            }
-
-            let statusDisplay = "";
-            if (isBlocked) {
-                statusDisplay = `<span class="badge badge-cancelled" style="background:#fee2e2; color:#b91c1c; font-weight:750; border:1px solid #f87171;">BLOCKED / CANCELLED</span>`;
-            } else if (isRescued) {
-                statusDisplay = `<span class="badge" style="background:#dcfce7; color:#15803d; font-weight:750; border:1px solid #86efac;">RESCUED</span>`;
-            } else {
-                statusDisplay = `<span class="badge ${getStatusBadgeClass(b.status)}">${escapeHtml(b.status)}</span>`;
-            }
-
-            let actionBtn = "";
-            if (isBlocked) {
-                actionBtn = `<button class="btn btn-primary btn-sm" onclick="openCaseForBooking('${escapeHtml(b.id)}')" style="font-weight: 750;">Rescue Flight</button>`;
-            } else if (isRescued) {
-                actionBtn = `<button class="btn btn-secondary btn-sm" onclick="openCaseForBooking('${escapeHtml(b.id)}')">View Case</button>`;
-            } else {
-                actionBtn = `<button class="btn btn-danger btn-sm" onclick="simulateCancellation('${escapeHtml(b.id)}')">Disrupt</button>`;
-            }
-
-            return `
-                <tr class="${rowClass}">
-                    <td><strong>${escapeHtml(b.id)}</strong></td>
-                    <td>
-                        <strong>${escapeHtml(b.passengerName)}</strong>
-                        ${isBlocked ? ' <span style="font-size:0.75rem; color:#dc2626; font-weight:750;">[Disrupted]</span>' : (isHero ? ' <span style="font-size:0.75rem; color:#2563eb; font-weight:700;">[Critical]</span>' : '')}
-                    </td>
-                    <td><span class="pnr-tag">${escapeHtml(b.pnr)}</span></td>
-                    <td>${escapeHtml(b.route)}</td>
-                    <td>${flightDisplay}</td>
-                    <td>${escapeHtml(b.dateTime)}</td>
-                    <td>
-                        ${b.onwardFlight && b.onwardFlight !== 'None' 
-                            ? `<span class="highlight-text">${escapeHtml(b.onwardFlight)}</span>` 
-                            : '<span style="color:#94a3b8;">&mdash;</span>'}
-                    </td>
-                    <td>
-                        ${b.hotelNote && b.hotelNote !== 'None' 
-                            ? `<span class="hotel-alert">${escapeHtml(b.hotelNote)}</span>` 
-                            : '<span style="color:#94a3b8;">&mdash;</span>'}
-                    </td>
-                    <td>${statusDisplay}</td>
-                    <td>
-                        <div style="display: flex; gap: 0.35rem; align-items: center;">
-                            ${actionBtn}
-                            ${!isHero ? `<button class="btn btn-secondary btn-sm" onclick="deleteBookingPrompt('${escapeHtml(b.id)}')" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" title="Delete">&times;</button>` : ''}
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join("");
-    }
+    renderFilteredBookings();
 }
 
 function openAddBookingModal() {
@@ -2029,62 +2148,122 @@ function escapeHtml(str) {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/**
+ * Normalizes an imputation value to a percentage number (0.0 to 100.0).
+ * Rejects negative numbers, numbers > 100, NaN, null, and undefined.
+ * Correctly distinguishes fractional rates (0 <= val <= 1) from percentage scales (1 < val <= 100).
+ */
+function normalizePercentage(val) {
+    if (val === null || val === undefined) return null;
+    const num = Number(val);
+    if (isNaN(num) || !isFinite(num)) return null;
+    if (num < 0 || num > 100) return null;
+    if (num <= 1.0) {
+        return num * 100;
+    }
+    return num;
+}
+
+function formatPercentage(val) {
+    const norm = normalizePercentage(val);
+    if (norm === null) return "N/A";
+    return `${norm.toFixed(1)}%`;
+}
+
 /* =============================================================================
    PHASE 4: ML OBSERVABILITY & PREDICTION QUALITY MONITORING
    ============================================================================= */
+
+let telemetryRequestSequence = 0;
+let lastKnownGoodTelemetry = null;
+let lastTelemetryRefreshTimestamp = null;
 
 async function refreshTelemetry(btnElement) {
     const btn = btnElement || document.getElementById("refresh-telemetry-btn");
     const origHtml = btn ? btn.innerHTML : "↻ Refresh Telemetry";
     if (btn) {
         btn.disabled = true;
+        btn.style.opacity = "0.75";
         btn.innerHTML = `<span style="display:inline-block; animation: spin 1s linear infinite;">↻</span> Refreshing...`;
     }
     try {
-        await fetchMonitoringData(false);
-        if (typeof fetchPredictiveLeaderboard === "function") fetchPredictiveLeaderboard().catch(() => {});
-        if (typeof fetchAirportHeatmap === "function") fetchAirportHeatmap().catch(() => {});
-        if (typeof fetchConnectionRiskQueue === "function") fetchConnectionRiskQueue().catch(() => {});
+        const results = await Promise.allSettled([
+            fetchMonitoringData(false),
+            typeof fetchPredictiveLeaderboard === "function" ? fetchPredictiveLeaderboard() : Promise.resolve(),
+            typeof fetchAirportHeatmap === "function" ? fetchAirportHeatmap() : Promise.resolve(),
+            typeof fetchConnectionRiskQueue === "function" ? fetchConnectionRiskQueue() : Promise.resolve()
+        ]);
 
-        if (btn) {
-            btn.style.background = "#dcfce7";
-            btn.style.color = "#166534";
-            btn.style.borderColor = "#86efac";
-            btn.innerHTML = "✓ Refreshed!";
-            setTimeout(() => {
-                btn.innerHTML = origHtml;
-                btn.disabled = false;
-                btn.style.background = "";
-                btn.style.color = "";
-                btn.style.borderColor = "";
-            }, 1500);
+        const primaryResult = results[0];
+        const secondaryResults = results.slice(1);
+        const secondaryFailures = secondaryResults.filter(r => r.status === "rejected").length;
+
+        if (primaryResult.status === "rejected") {
+            console.error("Primary ML monitoring fetch failed:", primaryResult.reason);
+            if (btn) {
+                btn.style.background = "#fee2e2";
+                btn.style.color = "#dc2626";
+                btn.style.borderColor = "#f87171";
+                btn.innerHTML = "✕ Refresh Failed";
+            }
+        } else if (secondaryFailures > 0) {
+            console.warn(`ML monitoring refreshed with ${secondaryFailures} secondary panel failure(s).`);
+            if (btn) {
+                btn.style.background = "#fef3c7";
+                btn.style.color = "#92400e";
+                btn.style.borderColor = "#fcd34d";
+                btn.innerHTML = `⚠ Partial Sync (${secondaryFailures} offline)`;
+            }
+        } else {
+            if (btn) {
+                btn.style.background = "#dcfce7";
+                btn.style.color = "#166534";
+                btn.style.borderColor = "#86efac";
+                btn.innerHTML = "✓ Refreshed (100% Sync)";
+            }
         }
-    } catch (err) {
-        console.error("Manual telemetry refresh encountered an error:", err);
+    } catch (unhandledErr) {
+        console.error("Unexpected error during telemetry refresh:", unhandledErr);
         if (btn) {
             btn.style.background = "#fee2e2";
             btn.style.color = "#dc2626";
             btn.style.borderColor = "#f87171";
-            btn.innerHTML = "⚠ Refresh Failed";
+            btn.innerHTML = "✕ Refresh Error";
+        }
+    } finally {
+        if (btn) {
             setTimeout(() => {
-                btn.innerHTML = origHtml;
                 btn.disabled = false;
+                btn.style.opacity = "1";
+                btn.innerHTML = origHtml;
                 btn.style.background = "";
                 btn.style.color = "";
                 btn.style.borderColor = "";
-            }, 2000);
+            }, 1800);
         }
     }
 }
 
 async function fetchMonitoringData(silent = false) {
+    const currentReqId = ++telemetryRequestSequence;
     try {
         const resp = await apiFetch("/api/intelligence/monitoring/summary");
         if (!resp.ok) {
             throw new Error(`HTTP error! status: ${resp.status}`);
         }
         const data = await resp.json();
+
+        // Guard against out-of-order network responses
+        if (currentReqId !== telemetryRequestSequence) {
+            console.warn(`[ML Telemetry] Stale response discarded (req #${currentReqId} vs active #${telemetryRequestSequence})`);
+            return;
+        }
+
+        lastKnownGoodTelemetry = data;
+        lastTelemetryRefreshTimestamp = new Date();
         renderMonitoringData(data);
+        updateTelemetryTimestampUI(lastTelemetryRefreshTimestamp, true);
+        return data;
     } catch (err) {
         if (!silent) console.error("Failed to fetch ML monitoring summary:", err);
         const circuitEl = document.getElementById("ml-circuit-badge");
@@ -2092,7 +2271,39 @@ async function fetchMonitoringData(silent = false) {
             circuitEl.textContent = "Telemetry Unavailable";
             circuitEl.style.background = "#fee2e2";
             circuitEl.style.color = "#dc2626";
+            circuitEl.style.borderColor = "#f87171";
         }
+        // Preserve last known good telemetry if available
+        if (lastKnownGoodTelemetry) {
+            console.info("[ML Telemetry] Preserving last known good telemetry snapshot.");
+            renderMonitoringData(lastKnownGoodTelemetry);
+        }
+        updateTelemetryTimestampUI(lastTelemetryRefreshTimestamp, false);
+        throw err;
+    }
+}
+
+function updateTelemetryTimestampUI(dateObj, isSuccess) {
+    const el = document.getElementById("ml-last-refresh-time");
+    if (!el) return;
+    if (!dateObj) {
+        el.textContent = "Sync: Offline";
+        el.style.background = "#fee2e2";
+        el.style.color = "#dc2626";
+        el.style.borderColor = "#f87171";
+        return;
+    }
+    const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (isSuccess) {
+        el.textContent = `Sync: ${timeStr}`;
+        el.style.background = "#dcfce7";
+        el.style.color = "#166534";
+        el.style.borderColor = "#86efac";
+    } else {
+        el.textContent = `Last Sync: ${timeStr} (Offline)`;
+        el.style.background = "#fef3c7";
+        el.style.color = "#92400e";
+        el.style.borderColor = "#fcd34d";
     }
 }
 
@@ -2155,70 +2366,111 @@ function renderMonitoringData(data) {
         const metrics = dq.metrics || {};
         const predStats = (data.predictions && data.predictions.imputation_stats) || {};
 
-        let impPct = null;
-        if (metrics.overall_imputation_rate != null) {
-            impPct = metrics.overall_imputation_rate * 100;
-        } else if (metrics.missing_duration_percentage != null) {
-            impPct = metrics.missing_duration_percentage;
-        } else if (predStats.imputation_rate != null) {
-            impPct = predStats.imputation_rate * 100;
-        } else if (dq.scheduled_duration_imputation_rate != null) {
-            impPct = dq.scheduled_duration_imputation_rate * 100;
-        }
+        // Authoritative metric: overall_imputation_rate or imputation_stats.imputation_rate
+        const rawRate = metrics.overall_imputation_rate ?? predStats.imputation_rate ?? metrics.missing_duration_percentage;
+        const formattedPct = formatPercentage(rawRate);
+        const normVal = normalizePercentage(rawRate);
 
-        if (impRateEl && impPct != null && !isNaN(impPct)) {
-            impRateEl.textContent = `${impPct.toFixed(1)}%`;
-            impRateEl.style.color = "#0284c7"; // Clean informative blue
+        if (impRateEl) {
+            impRateEl.textContent = formattedPct;
+            if (normVal === null) {
+                impRateEl.style.color = "#64748b";
+            } else if (normVal > 25.0) {
+                impRateEl.style.color = "#0284c7"; // Clean informative blue (regional coordinates)
+            } else {
+                impRateEl.style.color = "#16a34a"; // Green
+            }
         }
         if (impDetailEl) {
-            impDetailEl.textContent = `Auto-derived via airport coordinates`;
+            if (normVal === null) {
+                impDetailEl.textContent = "Imputation telemetry unavailable";
+            } else {
+                impDetailEl.textContent = "Auto-derived via airport coordinates";
+            }
+        }
+    } else {
+        if (impRateEl) {
+            impRateEl.textContent = "N/A";
+            impRateEl.style.color = "#64748b";
+        }
+        if (impDetailEl) {
+            impDetailEl.textContent = "Data quality metrics unavailable";
         }
     }
 
     // 5. Drift Monitoring (PSI)
     const driftStatusEl = document.getElementById("ml-drift-status");
     const driftDetailEl = document.getElementById("ml-drift-detail");
-    if (data.drift) {
+    if (data.drift && data.drift.status !== "UNAVAILABLE") {
         const dr = data.drift;
-        const isDrifted = dr.drift_level === "CRITICAL" || dr.drift_level === "WARNING" || dr.drift_detected === true || (dr.metrics && dr.metrics.max_psi >= 0.25);
+        const maxPsi = (dr.metrics && dr.metrics.max_psi != null && !isNaN(dr.metrics.max_psi))
+            ? Number(dr.metrics.max_psi).toFixed(2)
+            : null;
+        const isCritical = dr.drift_level === "CRITICAL" || (dr.metrics && dr.metrics.max_psi >= 0.25);
+        const isWarning = dr.drift_level === "WARNING" || (dr.metrics && dr.metrics.max_psi >= 0.10);
+
         if (driftStatusEl) {
-            if (dr.sample_size < 30) {
+            if (dr.sample_size != null && dr.sample_size < 30) {
                 driftStatusEl.textContent = "CALIBRATING";
                 driftStatusEl.style.color = "#64748b";
-            } else if (isDrifted) {
+            } else if (isCritical) {
                 driftStatusEl.textContent = "ADAPTIVE MODE";
-                driftStatusEl.style.color = "#4f46e5"; // Indigo: clean adaptive badge
-            } else {
+                driftStatusEl.style.color = "#4f46e5"; // Indigo
+            } else if (isWarning) {
+                driftStatusEl.textContent = "DRIFT WARNING";
+                driftStatusEl.style.color = "#d97706"; // Amber
+            } else if (dr.status === "EVALUATED") {
                 driftStatusEl.textContent = "STABLE";
-                driftStatusEl.style.color = "#16a34a";
+                driftStatusEl.style.color = "#16a34a"; // Green
+            } else {
+                driftStatusEl.textContent = "UNAVAILABLE";
+                driftStatusEl.style.color = "#64748b";
             }
         }
         if (driftDetailEl) {
-            if (dr.sample_size < 30) {
+            if (dr.sample_size != null && dr.sample_size < 30) {
                 driftDetailEl.textContent = `Sample N=${dr.sample_size}/30`;
+            } else if (isCritical) {
+                driftDetailEl.textContent = maxPsi ? `Regional corridor fallback (PSI ${maxPsi})` : `Regional corridor fallback engaged`;
+            } else if (isWarning) {
+                driftDetailEl.textContent = maxPsi ? `Distribution shift observed (PSI ${maxPsi})` : `Distribution shift observed`;
+            } else if (dr.status === "EVALUATED") {
+                driftDetailEl.textContent = maxPsi ? `PSI ${maxPsi} (within tolerance)` : `Nominal distribution`;
             } else {
-                driftDetailEl.textContent = `Regional corridor fallback engaged`;
+                driftDetailEl.textContent = "Drift metrics unavailable";
             }
+        }
+    } else {
+        if (driftStatusEl) {
+            driftStatusEl.textContent = "UNAVAILABLE";
+            driftStatusEl.style.color = "#64748b";
+        }
+        if (driftDetailEl) {
+            driftDetailEl.textContent = "Drift metrics unavailable";
         }
     }
 
     // 6. Outcome Calibration & Performance
     const outcomesEl = document.getElementById("ml-outcomes-evaluated");
     const brierEl = document.getElementById("ml-brier-detail");
-    if (data.performance && data.health) {
-        const perf = data.performance;
-        const evalCount = perf.evaluated_flights_count != null ? perf.evaluated_flights_count : (perf.evaluated_records_count || 0);
-        const pendingCount = data.health.pending_outcomes_count || 0;
+    if (data.performance || data.health) {
+        const perf = data.performance || {};
+        const health = data.health || {};
+        const evalCount = perf.evaluated_flights_count != null ? perf.evaluated_flights_count : 0;
+        const pendingCount = health.pending_outcomes_count != null ? health.pending_outcomes_count : 0;
+
         if (outcomesEl) {
             outcomesEl.textContent = `${evalCount} / ${evalCount + pendingCount}`;
         }
         if (brierEl) {
             if (evalCount > 0 && perf.cancellation && perf.cancellation.brier_score != null) {
                 const obsBrier = perf.cancellation.brier_score.toFixed(4);
-                const delta = perf.cancellation.brier_delta >= 0 ? `+${perf.cancellation.brier_delta.toFixed(4)}` : perf.cancellation.brier_delta.toFixed(4);
+                const delta = perf.cancellation.brier_delta != null
+                    ? (perf.cancellation.brier_delta >= 0 ? `+${perf.cancellation.brier_delta.toFixed(4)}` : perf.cancellation.brier_delta.toFixed(4))
+                    : "0.0000";
                 brierEl.innerHTML = `Brier: <strong>${obsBrier}</strong> (Δ ${delta})`;
             } else {
-                brierEl.textContent = `Pending: ${pendingCount} delayed flights`;
+                brierEl.textContent = `Awaiting flight outcomes (${pendingCount} pending)`;
             }
         }
     }

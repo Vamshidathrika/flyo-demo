@@ -1,17 +1,17 @@
 {
   "version": "1.0.0-PROD-STAGE5",
-  "buildTimestamp": "2026-11-10T07:11:01.800Z",
+  "buildTimestamp": "2026-11-10T07:26:34.299Z",
   "entrypoint": "index.html",
   "bundles": {
     "js": {
-      "file": "app.cb640e296f.min.js",
-      "sizeBytes": 132188,
-      "hash": "cb640e296f"
+      "file": "app.fc74fc0dec.min.js",
+      "sizeBytes": 143449,
+      "hash": "fc74fc0dec"
     },
     "css": {
-      "file": "style.5fe5ed7519.min.css",
-      "sizeBytes": 33916,
-      "hash": "5fe5ed7519"
+      "file": "style.2a95aa2130.min.css",
+      "sizeBytes": 34524,
+      "hash": "2a95aa2130"
     }
   },
   "verification": {

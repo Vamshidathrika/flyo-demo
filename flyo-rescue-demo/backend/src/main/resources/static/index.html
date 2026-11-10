@@ -40,35 +40,37 @@
                         Simulate Outage
                     </button>
                 </div>
+                <button class="btn btn-sm" id="btn-toggle-operator-drawer" onclick="toggleOperatorDrawer()" style="display: flex; align-items: center; gap: 0.35rem; font-weight: 700; font-size: 0.75rem; border: 1.5px solid #0284c7; color: #0284c7; background: #f0f9ff; padding: 0.35rem 0.75rem; border-radius: 6px; cursor: pointer;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    Operator 2FA &amp; Comms
+                </button>
             </div>
         </div>
     </header>
 
     <main class="main-container">
-        <!-- Main Platform Split Layout -->
+        <!-- Main Platform Layout -->
         <div class="platform-layout">
-            <!-- Left Column: Flyo Platform Core -->
+            <!-- Flyo Enterprise Operations Platform Core -->
             <div class="platform-main">
                 <!-- Top Section Navigation Tabs -->
                 <nav class="platform-nav-bar">
                     <button class="platform-tab-btn active" id="tab-monitor" onclick="switchSectionView('monitor')">
-                        Trip Monitor
+                        Disruption Monitor
                     </button>
                     <button class="platform-tab-btn" id="tab-ananya" onclick="switchSectionView('ananya')">
-                        Case Recovery <span class="tab-badge tab-badge-active" id="tab-ananya-badge" style="display: none;">Active</span>
-                    </button>
-                    <button class="platform-tab-btn" id="tab-msg" onclick="switchSectionView('msg')">
-                        Passenger Msg <span class="tab-badge tab-badge-count" id="tab-msg-count">0</span>
-                    </button>
-                    <button class="platform-tab-btn" id="tab-logs" onclick="switchSectionView('logs')">
-                        Audit Logs <span class="tab-badge tab-badge-count" id="tab-logs-count">0</span>
-                    </button>
-                    <button class="platform-tab-btn" id="tab-monitoring" onclick="switchSectionView('monitoring')">
-                        ML Observability <span class="tab-badge" id="tab-ml-status-badge" style="background: #0284c7; color: white;">v3</span>
+                        Incident Recovery <span class="tab-badge tab-badge-active" id="tab-ananya-badge" style="display: none;">Active</span>
                     </button>
                     <button class="platform-tab-btn" id="tab-ops" onclick="switchSectionView('ops')">
                         Operations Control <span class="tab-badge" id="tab-ops-badge" style="background: #059669; color: white;">Live</span>
                     </button>
+                    <button class="platform-tab-btn" id="tab-monitoring" onclick="switchSectionView('monitoring')">
+                        ML Observability <span class="tab-badge" id="tab-ml-status-badge" style="background: #0284c7; color: white;">v3</span>
+                    </button>
+                    <button class="platform-tab-btn" id="tab-logs" onclick="switchSectionView('logs')">
+                        Audit Trail <span class="tab-badge tab-badge-count" id="tab-logs-count">0</span>
+                    </button>
+                    <span id="tab-msg-count" style="display: none;">0</span>
                 </nav>
 
                 <!-- SECTION 1: TRIP MONITOR & BOOKINGS -->
@@ -89,62 +91,12 @@
                         </div>
                     </section>
 
-                    <!-- Pre-Made Adoptive Scenario Templates -->
-                    <div style="margin-bottom: 1.5rem;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                            <span style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; color: #475569; letter-spacing: 0.05em;">
-                                Pre-Made Adoptive Scenario Templates (1-Click Automation)
-                            </span>
-                            <span style="font-size: 0.75rem; color: #64748b;">Instant live demo presets</span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
-                            <!-- Template 1: Hero Scenario -->
-                            <div class="scenario-template-card" onclick="loadScenarioTemplate('hero')" style="background: white; border: 1.5px solid #2563eb; border-radius: 10px; padding: 1.25rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px -1px rgba(37,99,235,0.08);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <span style="background: #eff6ff; color: #1d4ed8; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;">Scenario 1 &middot; Hero</span>
-                                    <span style="font-size: 0.75rem; font-weight: 700; color: #16a34a;">Saves Toronto (YYZ)</span>
-                                </div>
-                                <div style="font-weight: 700; font-size: 1rem; color: #0f172a; margin-bottom: 0.35rem;">International Misconnect</div>
-                                <p style="font-size: 0.82rem; color: #64748b; margin: 0 0 1rem 0; line-height: 1.45;">
-                                    Ananya Sharma: AI-839 cancels. Preserves Toronto onward connection with 7h 50m buffer via Mumbai hub.
-                                </p>
-                                <button class="btn btn-primary btn-sm" style="width: 100%; background: #2563eb; color: white;">Run Hero Automation &rarr;</button>
-                            </div>
-
-                            <!-- Template 2: Domestic Express -->
-                            <div class="scenario-template-card" onclick="loadScenarioTemplate('domestic')" style="background: white; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 1.25rem; cursor: pointer; transition: all 0.2s ease;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <span style="background: #f1f5f9; color: #475569; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;">Scenario 2</span>
-                                    <span style="font-size: 0.75rem; font-weight: 700; color: #0284c7;">Same-Day Business</span>
-                                </div>
-                                <div style="font-weight: 700; font-size: 1rem; color: #0f172a; margin-bottom: 0.35rem;">Domestic Urgent Reschedule</div>
-                                <p style="font-size: 0.82rem; color: #64748b; margin: 0 0 1rem 0; line-height: 1.45;">
-                                    Rohit Verma: HYD &rarr; BLR morning flight 6E-402 cancelled. Ranks immediate direct alternatives for same-day meetings.
-                                </p>
-                                <button class="btn btn-secondary btn-sm" style="width: 100%;">Run Domestic Recovery &rarr;</button>
-                            </div>
-
-                            <!-- Template 3: Gateway 500 Outage -->
-                            <div class="scenario-template-card" onclick="loadScenarioTemplate('failover')" style="background: white; border: 1.5px solid #fecdd3; border-radius: 10px; padding: 1.25rem; cursor: pointer; transition: all 0.2s ease;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <span style="background: #fff1f2; color: #be123c; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;">Scenario 3 &middot; Chaos</span>
-                                    <span style="font-size: 0.75rem; font-weight: 700; color: #dc2626;">Airline 500 Outage</span>
-                                </div>
-                                <div style="font-weight: 700; font-size: 1rem; color: #0f172a; margin-bottom: 0.35rem;">Carrier Gateway Failover</div>
-                                <p style="font-size: 0.82rem; color: #64748b; margin: 0 0 1rem 0; line-height: 1.45;">
-                                    Carrier portal down (500). Tests 3 automated retries, failure screenshot, and emergency 1800 desk handoff.
-                                </p>
-                                <button class="btn btn-danger btn-sm" style="width: 100%;">Test Failure Mode &rarr;</button>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Bookings Section -->
                     <section class="card bookings-card">
                         <div class="card-header">
                             <div>
-                                <h2>Today's Live Bookings</h2>
-                                <p class="section-desc">Active passenger itineraries monitored for flight cancellations</p>
+                                <h2>Today's Live Flight Manifest &amp; PNR Monitor</h2>
+                                <p class="section-desc">Active passenger itineraries monitored for flight cancellations and MCT connection risks</p>
                             </div>
                             <div class="header-actions">
                                 <button class="btn btn-primary" onclick="openAddBookingModal()" style="background: #2563eb; color: white;">＋ Add Booking</button>
@@ -180,7 +132,7 @@
                             </div>
                         </div>
 
-                        <!-- Hero Booking Alert Callout -->
+                        <!-- Priority Incident Watchlist Banner -->
                         <div class="hero-callout" id="hero-callout">
                             <div class="hero-callout-content">
                                 <div class="hero-badge">Priority Watchlist</div>
@@ -200,26 +152,57 @@
                             </div>
                         </div>
 
-                        <!-- Bookings Table -->
+                        <!-- Operational Flight Filters & Search Bar -->
+                        <div class="flight-filter-bar" style="display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; padding: 0.85rem 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin: 1rem 0; flex-wrap: wrap;">
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 260px;">
+                                <input type="text" id="flight-search-input" placeholder="Search by flight (AI-839), PNR, passenger, or route..." oninput="handleFlightFilterChange()" style="flex: 1; padding: 0.5rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                <select id="filter-status-select" onchange="handleFlightFilterChange()" style="padding: 0.5rem 0.65rem; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: white; font-weight: 600; color: #334155;">
+                                    <option value="ALL">All Statuses</option>
+                                    <option value="DISRUPTED">Disrupted / Blocked</option>
+                                    <option value="MONITORED">Nominal / Monitored</option>
+                                    <option value="RESCUED">Rescued / Protected</option>
+                                </select>
+                                <select id="filter-severity-select" onchange="handleFlightFilterChange()" style="padding: 0.5rem 0.65rem; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: white; font-weight: 600; color: #334155;">
+                                    <option value="ALL">All Severities</option>
+                                    <option value="CRITICAL">Critical (MCT Risk)</option>
+                                    <option value="ELEVATED">Elevated</option>
+                                    <option value="NORMAL">Normal</option>
+                                </select>
+                                <select id="filter-airline-select" onchange="handleFlightFilterChange()" style="padding: 0.5rem 0.65rem; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.8rem; background: white; font-weight: 600; color: #334155;">
+                                    <option value="ALL">All Airlines</option>
+                                    <option value="Air India">Air India</option>
+                                    <option value="IndiGo">IndiGo</option>
+                                    <option value="Vistara">Vistara</option>
+                                </select>
+                                <button class="btn btn-secondary btn-sm" onclick="resetFlightFilters()" style="padding: 0.45rem 0.75rem; font-size: 0.75rem;">
+                                    Reset Filters
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- High-Density OCC Flight Manifest Table (11 Columns) -->
                         <div class="table-responsive">
                             <table class="bookings-table">
                                 <thead>
                                     <tr>
-                                        <th>Booking ID</th>
-                                        <th>Passenger</th>
-                                        <th>PNR</th>
-                                        <th>Route</th>
                                         <th>Flight</th>
-                                        <th>Departure</th>
-                                        <th>Onward Connection</th>
-                                        <th>Hotel Note</th>
+                                        <th>Airline</th>
+                                        <th>Route</th>
+                                        <th>Sched Dep</th>
+                                        <th>Est Dep / Delay</th>
                                         <th>Status</th>
-                                        <th>Action</th>
+                                        <th>Affected Pax</th>
+                                        <th>High-Risk Connections</th>
+                                        <th>Disruption Severity</th>
+                                        <th>Last Update</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="bookings-tbody">
                                     <tr>
-                                        <td colspan="10" class="loading-state">Loading Flyo bookings...</td>
+                                        <td colspan="11" class="loading-state">Loading live flight telemetry...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -469,11 +452,42 @@
                                 </div>
                             </div>
 
-                            <!-- Quick Section Shortcuts -->
+                            <!-- Omnichannel Passenger Dispatch & Telemetry (Meta WhatsApp Cloud API) -->
+                            <div class="omnichannel-dispatch-card card" id="omnichannel-dispatch-card" style="margin-top: 1.5rem; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px;">
+                                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.25rem; border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+                                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                        <span style="background: #25d366; color: white; font-size: 0.7rem; font-weight: 750; padding: 0.15rem 0.5rem; border-radius: 4px;">
+                                            PASSENGER CHANNEL
+                                        </span>
+                                        <strong style="color: #0f172a; font-size: 0.95rem;">Omnichannel Passenger Communication Feed</strong>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                        <span class="badge" style="background: #dcfce7; color: #166534; font-weight: 700; border: 1px solid #86efac;">
+                                            Meta Cloud API &middot; Verified Business Account
+                                        </span>
+                                        <span class="badge" id="passenger-channel-pnr" style="background: #e0f2fe; color: #0369a1; font-weight: 700;">
+                                            WhatsApp: +91 98765 43210
+                                        </span>
+                                    </div>
+                                </div>
+                                <div style="padding: 1.25rem;">
+                                    <div class="omnichannel-feed-wrapper" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; max-height: 380px; overflow-y: auto; margin-bottom: 1rem;">
+                                        <div id="whatsapp-chat-body" class="whatsapp-chat-body">
+                                            <!-- Injected dynamically by renderMessages() -->
+                                        </div>
+                                    </div>
+                                    <!-- Operator Dispatch Message Input -->
+                                    <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                        <input type="text" id="passenger-chat-input" placeholder="Message passenger with flight recovery update..." style="flex: 1; padding: 0.55rem 0.85rem; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;" onkeydown="handlePassengerChatKey(event)">
+                                        <button class="btn btn-primary btn-sm" id="passenger-send-btn" onclick="submitPassengerChatInput()" style="padding: 0.55rem 1.15rem; font-size: 0.82rem; background: #2563eb; color: white; font-weight: 600;">
+                                            Send Dispatch Message
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Audit Ledger Shortcut -->
                             <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap;">
-                                <button class="btn btn-secondary btn-sm" onclick="switchSectionView('msg')">
-                                    View Passenger WhatsApp Notification &rarr;
-                                </button>
                                 <button class="btn btn-secondary btn-sm" onclick="switchSectionView('logs')">
                                     View Chronological Audit Ledger &rarr;
                                 </button>
@@ -482,100 +496,8 @@
                     </section>
                 </div>
 
-                <!-- SECTION 3: PASSENGER MESSAGES -->
-                <div class="section-view" id="view-msg">
-                    <div class="passenger-view-wrapper">
-                        <!-- Navigation Bar / Control strip -->
-                        <div class="passenger-nav-toolbar">
-                            <button class="btn btn-secondary btn-sm" onclick="switchSectionView('ananya')">
-                                &larr; Back to Ananya Case
-                            </button>
-                            <div class="passenger-toolbar-info">
-                                <strong>Passenger Channel:</strong> Ananya Sharma (+91 98765 43210) &middot; PNR: <span class="pnr-tag">HYD123</span>
-                            </div>
-                            <span class="simulated-badge">LIVE PASSENGER FEED</span>
-                        </div>
-
-                        <!-- Centered Mobile Phone Mockup -->
-                        <div class="mobile-phone-mockup passenger-phone-mockup">
-                            <div class="phone-screen">
-                                <!-- Phone Top Status Bar -->
-                                <div class="phone-status-bar">
-                                    <span class="status-time">09:41</span>
-                                    <div class="dynamic-island">
-                                        <span class="island-camera"></span>
-                                        <span class="island-mic"></span>
-                                    </div>
-                                    <div class="status-system-icons">
-                                        <span class="status-cell-signal">
-                                            <span class="bar bar-1"></span>
-                                            <span class="bar bar-2"></span>
-                                            <span class="bar bar-3"></span>
-                                            <span class="bar bar-4"></span>
-                                        </span>
-                                        <span class="status-network">5G</span>
-                                        <span class="status-battery-icon">
-                                            <span class="battery-level"></span>
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <!-- WhatsApp Header -->
-                                <div class="whatsapp-window-header">
-                                    <div class="whatsapp-header-left">
-                                        <span class="wa-back-btn">&larr;</span>
-                                        <div class="whatsapp-avatar passenger-wa-avatar">F</div>
-                                        <div class="whatsapp-contact-info">
-                                            <h3 id="passenger-wa-contact-name">Flyo Flight Updates <span class="whatsapp-verified-badge">&#10003;</span></h3>
-                                            <p id="passenger-wa-contact-sub"><span class="whatsapp-pulse-dot"></span> Official Business Account</p>
-                                        </div>
-                                    </div>
-                                    <div class="whatsapp-header-icons">
-                                        <span class="wa-header-icon" title="Video Call">
-                                            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
-                                        </span>
-                                        <span class="wa-header-icon" title="Voice Call">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.44-5.15-3.75-6.59-6.59l1.97-1.57c.27-.27.36-.66.25-1.01A11.36 11.36 0 0 1 8.56 4.4c0-.55-.45-1-1-1H4.03c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-.02-1.02z"/></svg>
-                                        </span>
-                                        <span class="wa-header-icon" title="Menu">
-                                            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <!-- WhatsApp Chat Body with Authentic Background -->
-                                <div class="whatsapp-chat-feed passenger-wa-feed" id="passenger-wa-feed">
-                                    <div class="chat-date-chip">TODAY</div>
-                                    <div class="chat-encryption-pill">Messages and calls are end-to-end encrypted. No one outside of this chat, not even WhatsApp, can read or listen to them.</div>
-                                    <div class="whatsapp-chat-body" id="whatsapp-chat-body">
-                                        <!-- Injected dynamically by renderMessages() -->
-                                    </div>
-                                </div>
-
-                                <!-- WhatsApp Input Bar -->
-                                <div class="whatsapp-input-row">
-                                    <div class="wa-input-capsule">
-                                        <span class="wa-capsule-icon">
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-                                        </span>
-                                        <input type="text" id="passenger-chat-input" class="wa-chat-input" placeholder="Message Flyo Flight Updates..." onkeydown="handlePassengerChatKey(event)">
-                                        <span class="wa-capsule-icon">
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                                        </span>
-                                    </div>
-                                    <button class="wa-send-btn-circle" id="passenger-send-btn" onclick="submitPassengerChatInput()" title="Send">
-                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="white">
-                                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-
-                                <!-- Phone Bottom Home Indicator -->
-                                <div class="phone-home-indicator"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <!-- Hidden compatibility anchor for view-msg -->
+                <div class="section-view" id="view-msg" style="display: none;"></div>
 
                 <!-- SECTION 4: CHRONOLOGICAL AUDIT LOGS -->
                 <div class="section-view" id="view-logs">
@@ -587,7 +509,7 @@
                             </div>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <button class="btn btn-secondary btn-sm" onclick="switchSectionView('ananya')">
-                                    &larr; Back to Ananya Case
+                                    &larr; Back to Incident Recovery
                                 </button>
                                 <span class="options-count-badge" id="audit-count-badge">0 Events</span>
                             </div>
@@ -615,6 +537,9 @@
                                 </span>
                                 <span class="badge" id="ml-version-badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700; border: 1px solid #7dd3fc;">
                                     v3.0.0-aviation-intelligence
+                                </span>
+                                <span class="badge" id="ml-last-refresh-time" style="background: #f1f5f9; color: #475569; font-weight: 600; border: 1px solid #cbd5e1; font-size: 0.72rem;">
+                                    Sync: Ready
                                 </span>
                                 <button class="btn btn-secondary btn-sm" id="refresh-telemetry-btn" onclick="refreshTelemetry(this)" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">
                                     ↻ Refresh Telemetry
@@ -1054,95 +979,53 @@
                 </div>
             </div>
 
-            <!-- Right Column: WhatsApp Mock Test Window in Mobile Mockup -->
-            <div class="platform-sidebar">
-                <div class="mobile-phone-mockup">
-                    <div class="phone-screen">
-                        <!-- Phone Top Status Bar -->
-                        <div class="phone-status-bar">
-                            <span class="status-time">09:41</span>
-                            <div class="dynamic-island">
-                                <span class="island-camera"></span>
-                                <span class="island-mic"></span>
-                            </div>
-                            <div class="status-system-icons">
-                                <span class="status-cell-signal">
-                                    <span class="bar bar-1"></span>
-                                    <span class="bar bar-2"></span>
-                                    <span class="bar bar-3"></span>
-                                    <span class="bar bar-4"></span>
-                                </span>
-                                <span class="status-network">5G</span>
-                                <span class="status-battery-icon">
-                                    <span class="battery-level"></span>
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- WhatsApp Header -->
-                        <div class="whatsapp-window-header">
-                            <div class="whatsapp-header-left">
-                                <span class="wa-back-btn">&larr;</span>
-                                <div class="whatsapp-avatar">F</div>
-                                <div class="whatsapp-contact-info">
-                                    <h3>Flyo Operations <span class="whatsapp-verified-badge">&#10003;</span></h3>
-                                    <p><span class="whatsapp-pulse-dot"></span> online</p>
-                                </div>
-                            </div>
-                            <div class="whatsapp-header-icons">
-                                <span class="wa-header-icon" title="Video Call">
-                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
-                                </span>
-                                <span class="wa-header-icon" title="Voice Call">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.44-5.15-3.75-6.59-6.59l1.97-1.57c.27-.27.36-.66.25-1.01A11.36 11.36 0 0 1 8.56 4.4c0-.55-.45-1-1-1H4.03c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-.02-1.02z"/></svg>
-                                </span>
-                                <span class="wa-header-icon" title="Menu">
-                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- WhatsApp Live Chat Feed -->
-                        <div class="whatsapp-chat-feed" id="wa-chat-feed">
-                            <div class="chat-date-chip">TODAY</div>
-                            <div class="chat-encryption-pill">Messages are end-to-end encrypted &middot; Flyo 2FA Protected</div>
-                            <div class="empty-state" style="color: #64748b; font-size: 0.8rem;">Connecting to Flyo WhatsApp Webhook Gateway...</div>
-                        </div>
-
-                        <!-- WhatsApp Quick Command Bar -->
-                        <div class="whatsapp-command-bar">
-                            <button class="cmd-pill pill-primary" onclick="sendWhatsAppOperatorCommand('HI')">Hi / Login</button>
-                            <button class="cmd-pill pill-danger" onclick="sendWhatsAppOperatorCommand('DISRUPT B1')">Cancel AI-839</button>
-                            <button class="cmd-pill pill-success" style="background:#16a34a; color:white; font-weight:700;" onclick="sendWhatsAppOperatorCommand('APPROVE_REBOOK_O2')">⚡ 1-Tap Rebook (O2)</button>
-                            <button class="cmd-pill" onclick="sendWhatsAppOperatorCommand('SELECT O2')">Select O2</button>
-                            <button class="cmd-pill" onclick="sendWhatsAppOperatorCommand('REQUEST OTP')">Request OTP</button>
-                            <button class="cmd-pill" onclick="sendWhatsAppOperatorCommand('STATUS')">Status</button>
-                            <button class="cmd-pill" onclick="sendWhatsAppOperatorCommand('RESET')">Reset</button>
-                        </div>
-
-                        <!-- WhatsApp Message Input Row -->
-                        <div class="whatsapp-input-row">
-                            <div class="wa-input-capsule">
-                                <span class="wa-capsule-icon">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-                                </span>
-                                <input type="text" id="wa-chat-input" class="wa-chat-input" placeholder="Message or OTP (e.g. 123456)..." onkeydown="handleChatInputKey(event)">
-                                <span class="wa-capsule-icon">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                                </span>
-                            </div>
-                            <button class="wa-send-btn-circle" id="wa-send-btn" onclick="submitChatInput()" title="Send">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="white">
-                                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
-                                </svg>
-                            </button>
-                        </div>
-
-                        <!-- Phone Bottom Home Indicator -->
-                        <div class="phone-home-indicator"></div>
-                    </div>
-                </div>
             </div>
+        </div>
+    </main>
+
+    <!-- Contextual Operator 2FA & Simulation Slide-Over Drawer -->
+    <div class="operator-drawer-overlay" id="operator-drawer-overlay" onclick="toggleOperatorDrawer()"></div>
+    <aside class="operator-drawer" id="operator-drawer">
+        <div class="operator-drawer-header">
+            <div>
+                <h3 style="margin: 0; font-size: 1rem; font-weight: 750; color: #0f172a; display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="background: #0284c7; width: 8px; height: 8px; border-radius: 9999px; display: inline-block;"></span>
+                    Operator 2FA &amp; Dispatch Console
+                </h3>
+                <p style="margin: 0.2rem 0 0; font-size: 0.75rem; color: #64748b;">
+                    Meta WhatsApp Cloud API Webhook Control Plane
+                </p>
+            </div>
+            <button onclick="toggleOperatorDrawer()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+        </div>
+        <div class="operator-drawer-body" style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; height: calc(100vh - 70px);">
+            <!-- WhatsApp Live Chat Feed -->
+            <div class="whatsapp-chat-feed" id="wa-chat-feed" style="flex: 1; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem; overflow-y: auto; background: #f8fafc;">
+                <div class="chat-date-chip">TODAY</div>
+                <div class="chat-encryption-pill">Messages are end-to-end encrypted &middot; Flyo 2FA Protected</div>
+                <div class="empty-state" style="color: #64748b; font-size: 0.8rem;">Connecting to Flyo WhatsApp Webhook Gateway...</div>
+            </div>
+
+            <!-- WhatsApp Quick Command Bar -->
+            <div class="whatsapp-command-bar" style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                <button class="cmd-pill pill-primary" onclick="sendWhatsAppOperatorCommand('HI')">Hi / Login</button>
+                <button class="cmd-pill pill-danger" onclick="sendWhatsAppOperatorCommand('DISRUPT B1')">Cancel AI-839</button>
+                <button class="cmd-pill pill-success" style="background:#16a34a; color:white; font-weight:700;" onclick="sendWhatsAppOperatorCommand('APPROVE_REBOOK_O2')">⚡ 1-Tap Rebook (O2)</button>
+                <button class="cmd-pill" onclick="sendWhatsAppOperatorCommand('SELECT O2')">Select O2</button>
+                <button class="cmd-pill" onclick="sendWhatsAppOperatorCommand('REQUEST OTP')">Request OTP</button>
+                <button class="cmd-pill" onclick="sendWhatsAppOperatorCommand('STATUS')">Status</button>
+                <button class="cmd-pill" onclick="sendWhatsAppOperatorCommand('RESET')">Reset</button>
+            </div>
+
+            <!-- WhatsApp Message Input Row -->
+            <div class="whatsapp-input-row" style="display: flex; gap: 0.5rem;">
+                <input type="text" id="wa-chat-input" class="wa-chat-input" placeholder="Message or OTP (e.g. 123456)..." onkeydown="handleChatInputKey(event)" style="flex: 1; padding: 0.55rem 0.75rem; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
+                <button class="btn btn-primary btn-sm" id="wa-send-btn" onclick="submitChatInput()" title="Send" style="padding: 0.55rem 1rem; background: #0284c7; color: white;">
+                    Send
+                </button>
+            </div>
+        </div>
+    </aside>
         </div>
     </main>
 
