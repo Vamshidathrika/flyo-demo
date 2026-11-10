@@ -105,7 +105,7 @@ public class BookingService {
 
     @Transactional
     public void clearAllBookings() {
-        if (environment != null && environment.matchesProfiles("prod")) {
+        if (environment != null && (environment.matchesProfiles("prod") || !environment.acceptsProfiles(org.springframework.core.env.Profiles.of("dev", "demo", "test")))) {
             throw new UnsupportedOperationException("Production data clear is strictly prohibited.");
         }
         if (optionRepository != null) {
@@ -125,7 +125,7 @@ public class BookingService {
 
     @Transactional
     public List<Booking> resetSeedBookings() {
-        if (environment != null && environment.matchesProfiles("prod")) {
+        if (environment != null && (environment.matchesProfiles("prod") || !environment.acceptsProfiles(org.springframework.core.env.Profiles.of("dev", "demo", "test")))) {
             throw new UnsupportedOperationException("Production seed reset is strictly prohibited.");
         }
         if (optionRepository != null) {

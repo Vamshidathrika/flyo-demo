@@ -10,6 +10,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -33,15 +35,18 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final LoginRateLimiter rateLimiter;
+    private final Environment environment;
 
     public AuthController(OperatorAccountRepository operatorRepository,
                           PasswordEncoder passwordEncoder,
                           JwtTokenProvider tokenProvider,
-                          LoginRateLimiter rateLimiter) {
+                          LoginRateLimiter rateLimiter,
+                          Environment environment) {
         this.operatorRepository = operatorRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.rateLimiter = rateLimiter;
+        this.environment = environment;
     }
 
     @PostMapping("/login")
@@ -101,6 +106,51 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(AuthResponse.failure("Invalid username or password."));
         }
+    }
+
+    @PostMapping("/demo-session")
+    public ResponseEntity<?> demoSession() {
+        if (!environment.acceptsProfiles(Profiles.of("demo"))) {
+            log.warn("[Auth] Rejected /api/auth/demo-session request because 'demo' profile is not active. Active profiles: {}",
+                    (Object) environment.getActiveProfiles());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "error", "Forbidden",
+                            "message", "Demo authentication is only permitted under the demo profile."
+                    ));
+        }
+
+        String username = "admin";
+        Optional<OperatorAccount> accountOpt = operatorRepository.findByUsername(username);
+        if (accountOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Demo admin account not found. Ensure flyo.seeding.enabled=true in demo profile."));
+        }
+
+        OperatorAccount account = accountOpt.get();
+        String role = account.getRole();
+        if (role != null && !role.startsWith("ROLE_")) {
+            role = "ROLE_" + role;
+        }
+        List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(role != null ? role : "ROLE_ADMIN"));
+
+        Map<String, Object> claims = Map.of(
+                "fullName", account.getFullName() != null ? account.getFullName() : "System Admin",
+                "userId", account.getId() != null ? account.getId() : "USR-DEMO",
+                "tenantId", account.getTenantId() != null ? account.getTenantId() : "tenant_default",
+                "authorizedTenants", account.getAuthorizedTenants() != null ? account.getAuthorizedTenants() : "*"
+        );
+
+        String token = tokenProvider.generateToken(account.getUsername(), authorities, claims);
+        log.info("[Auth] Operator '{}' authenticated via demo session under 'demo' profile", account.getUsername());
+
+        return ResponseEntity.ok(AuthResponse.success(
+                token,
+                tokenProvider.getValidityMillis(),
+                account.getUsername(),
+                account.getFullName(),
+                List.of(role)
+        ));
     }
 
     @GetMapping("/me")

@@ -80,7 +80,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        boolean isDevProfile = environment.acceptsProfiles(Profiles.of("dev", "test", "default"));
+        boolean isDevProfile = environment.acceptsProfiles(Profiles.of("dev", "test", "default", "demo"));
 
         http
             .csrf(csrf -> csrf.disable()) // Stateless Bearer Token Architecture
@@ -130,6 +130,7 @@ public class SecurityConfig {
                     "/favicon.ico",
                     "/screenshots/**",
                     "/api/auth/login",
+                    "/api/auth/demo-session",
                     "/api/whatsapp/webhook", // Authenticated via Meta HMAC-SHA256 signature in controller
                     "/api/webhooks/**",       // Authenticated via HMAC-SHA256 signature and timestamp in WebhookProcessor
                     "/actuator/health",

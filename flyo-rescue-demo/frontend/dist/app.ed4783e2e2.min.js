@@ -6,10 +6,9 @@ let currentOperator = JSON.parse(localStorage.getItem("flyo_operator") || "null"
 
 async function autoLoginDemoUser() {
     try {
-        const res = await fetch("/api/auth/login", {
+        const res = await fetch("/api/auth/demo-session", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: "admin", password: "AdminSecret123!" })
+            headers: { "Content-Type": "application/json" }
         });
         if (res.ok) {
             const data = await res.json();
@@ -25,6 +24,8 @@ async function autoLoginDemoUser() {
                 updateOperatorBadgeUI();
                 return true;
             }
+        } else {
+            console.warn("[Flyo Auth] Demo auto-login disabled or forbidden in this environment (active profile is not 'demo').");
         }
     } catch (e) {
         console.warn("[Flyo Auth] Auto-login attempt failed:", e);
@@ -723,7 +724,11 @@ async function fetchPaymentDetails(caseId) {
                 statusBadge.style.background = vcc.status === "CHARGED" ? "#16a34a" : "#2563eb";
             }
             const numEl = document.getElementById("vcc-display-number");
-            if (numEl) numEl.textContent = vcc.maskedCardNumber || "4532 •••• •••• 8821";
+            if (numEl) {
+                const raw = vcc.maskedCardNumber || "8821";
+                const last4 = raw.replace(/\D/g, "").slice(-4) || "8821";
+                numEl.textContent = `•••• •••• •••• ${last4}`;
+            }
             const amtEl = document.getElementById("vcc-display-amount");
             if (amtEl) amtEl.textContent = `₹${vcc.amount ? vcc.amount.toLocaleString() : '4,200'}`;
             const mccEl = document.getElementById("vcc-display-mcc");
@@ -1757,6 +1762,12 @@ function detectOtpInChat(messages) {
         const otpInputCode = document.getElementById("otp-input-code");
         if (otpMatch && otpInputCode && !otpInputCode.value) {
             otpInputCode.value = otpMatch[1];
+            const badge = document.getElementById("otp-demo-convenience-badge");
+            if (badge) badge.style.display = "inline-block";
+            const feedback = document.getElementById("otp-status-feedback");
+            if (feedback) {
+                feedback.innerHTML = `<span style="color:#d97706; font-weight:700;">[SIMULATED DEMO CONVENIENCE]</span> Pre-filled OTP <strong>${otpMatch[1]}</strong> for walkthrough fluidity. In production, 2FA codes are delivered out-of-band and manually submitted.`;
+            }
         }
     }
 }

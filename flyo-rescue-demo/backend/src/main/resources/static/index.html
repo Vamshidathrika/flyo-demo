@@ -17,6 +17,10 @@
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <div class="header-status" id="demo-mode-badge" style="background: rgba(245, 158, 11, 0.15); border: 1.5px solid #f59e0b;">
+                    <span class="status-indicator" style="background: #f59e0b; box-shadow: 0 0 8px #f59e0b;"></span>
+                    <span class="status-text" style="color: #b45309; font-weight: 800; letter-spacing: 0.02em;">DEMO MODE: Simulated Operations</span>
+                </div>
                 <div class="header-status" id="operator-badge-container" style="background: rgba(14, 165, 233, 0.15); border: 1px solid #0284c7;">
                     <span class="status-indicator" style="background: #0284c7; box-shadow: 0 0 8px #0284c7;"></span>
                     <span class="status-text" id="operator-status-text" style="color: #0369a1; font-weight: 700;">Operator: System Admin (ROLE_ADMIN)</span>
@@ -286,15 +290,18 @@
                         <div class="vcc-treasury-card" id="vcc-treasury-card" style="display: none; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span style="font-weight: 700; color: #2563eb; font-size: 0.8rem; border: 1px solid #93c5fd; padding: 0.15rem 0.45rem; border-radius: 4px; background: #eff6ff;">VCC</span>
-                                    <strong style="color: #0f172a; font-size: 0.95rem;">Corporate Virtual Credit Card (VCC) &middot; Single-Use Settlement</strong>
+                                    <span style="font-weight: 700; color: #b45309; font-size: 0.75rem; border: 1px solid #fde68a; padding: 0.15rem 0.45rem; border-radius: 4px; background: #fef3c7;">SIMULATED VCC &middot; TEST MODE</span>
+                                    <strong style="color: #0f172a; font-size: 0.95rem;">Corporate Virtual Credit Card &middot; Stripe Issuing Sandbox</strong>
                                 </div>
-                                <span class="badge" id="vcc-status-badge" style="background: #2563eb; color: white; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.6rem; border-radius: 9999px;">ISSUED</span>
+                                <span class="badge" id="vcc-status-badge" style="background: #2563eb; color: white; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.6rem; border-radius: 9999px;">ISSUED (TEST INSTRUMENT)</span>
+                            </div>
+                            <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; font-size: 0.75rem; color: #92400e; line-height: 1.4;">
+                                <strong>[SIMULATED VCC &mdash; STRIPE ISSUING SANDBOX]</strong> Virtual credit cards demonstrated in this environment are simulated sandbox instruments issued for testing and workflow verification. No real money or live commercial credit line is moved.
                             </div>
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 0.75rem;">
                                 <div>
-                                    <span style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block;">Card Number</span>
-                                    <span id="vcc-display-number" style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: #1e293b;">4532 •••• •••• 8821</span>
+                                    <span style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block;">Card Number (PCI Masked)</span>
+                                    <span id="vcc-display-number" style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: #1e293b;">•••• •••• •••• 8821</span>
                                 </div>
                                 <div>
                                     <span style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block;">Authorized Amount</span>
@@ -305,13 +312,13 @@
                                     <span id="vcc-display-mcc" style="font-size: 0.8rem; font-weight: 600; color: #059669;">MCC 3000 (Airlines)</span>
                                 </div>
                                 <div>
-                                    <span style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block;">Treasury Account</span>
-                                    <span style="font-size: 0.8rem; font-weight: 600; color: #475569;">RazorpayX Corporate Line</span>
+                                    <span style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block;">Treasury Sandbox Line</span>
+                                    <span style="font-size: 0.8rem; font-weight: 600; color: #475569;">Stripe Issuing Sandbox</span>
                                 </div>
                             </div>
                             <div id="vcc-ledger-area" style="font-size: 0.8rem; color: #475569;">
                                 <div id="vcc-ledger-text" style="font-family: monospace; background: #f1f5f9; padding: 0.5rem 0.75rem; border-radius: 4px;">
-                                    Settlement Status: Ready for automated checkout authorization
+                                    Settlement Status: Ready for simulated checkout authorization [SANDBOX]
                                 </div>
                             </div>
                         </div>
@@ -320,14 +327,18 @@
                         <div class="otp-security-card" id="otp-security-card" style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span style="font-weight: 700; color: #0284c7; font-size: 0.8rem; border: 1px solid #7dd3fc; padding: 0.15rem 0.45rem; border-radius: 4px; background: #f0f9ff;">2FA GATE</span>
-                                    <strong style="color: #0f172a; font-size: 0.95rem;">Flyo Security &middot; Operator OTP Verification</strong>
+                                    <span style="font-weight: 700; color: #b45309; font-size: 0.75rem; border: 1px solid #fde68a; padding: 0.15rem 0.45rem; border-radius: 4px; background: #fef3c7;">SIMULATED OTP GATE</span>
+                                    <strong style="color: #0f172a; font-size: 0.95rem;">Flyo Security &middot; Operator 2FA Verification</strong>
                                 </div>
                                 <button type="button" class="btn btn-secondary btn-sm" id="btn-req-otp" onclick="requestSecurityOtp()" style="font-weight: 600;">Request WhatsApp OTP</button>
+                            </div>
+                            <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; font-size: 0.75rem; color: #92400e; line-height: 1.4;">
+                                <strong>[SIMULATED DEMO CONVENIENCE &mdash; NOT PRODUCTION 2FA]</strong> In production, OTP is received on the passenger or operator device and must be manually entered. Auto-prefill is provided solely for demonstration fluidity. OTP alone cannot authorize transactions without operator approval.
                             </div>
                             <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap;">
                                 <input type="text" id="otp-input-code" placeholder="Enter 6-digit OTP code (e.g. 123456)" maxlength="6" style="padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-family: monospace; font-size: 0.95rem; width: 240px;" onkeydown="handleOtpInputKey(event)">
                                 <button type="button" class="btn btn-primary btn-sm" id="btn-verify-otp" onclick="verifySecurityOtp()" style="background: #2563eb; color: white; font-weight: 600;">Verify &amp; Unlock Gate</button>
+                                <span class="badge" id="otp-demo-convenience-badge" style="display: none; background: #fef3c7; color: #92400e; font-size: 0.75rem; border: 1px solid #fde68a; padding: 0.25rem 0.5rem; border-radius: 4px;">SIMULATED DEMO CONVENIENCE: Auto-Prefilled</span>
                             </div>
                             <div id="otp-status-feedback" style="font-size: 0.82rem; color: #64748b; font-weight: 500;">
                                 Ready. Authenticate in WhatsApp chat or enter 6-digit code above.
@@ -336,16 +347,22 @@
 
                         <!-- Rebooking Complete Success Card -->
                         <div class="rebook-success-card" id="rebook-success-card" style="display: none;">
-                            <div class="rebook-success-header">
+                            <div class="rebook-success-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
                                 <div>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                        <span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 800; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid #fde68a;">EXECUTION MODE: MOCK_DEMO</span>
+                                        <span style="background: #16a34a; color: white; font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 9999px;">IDEMPOTENT &middot; VERIFIED</span>
+                                    </div>
                                     <h3 style="color: #14532d; font-size: 1.15rem; font-weight: 800;">Itinerary Successfully Rescued</h3>
-                                    <p style="color: #15803d; font-size: 0.85rem;">New ticket issued by Playwright worker on mock airline portal</p>
+                                    <p style="color: #15803d; font-size: 0.85rem;">Reservation executed by Playwright browser automation against Flyo's mock airline portal</p>
                                 </div>
                             </div>
+                            <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 0.5rem 0.75rem; margin: 0.5rem 0; font-size: 0.75rem; color: #92400e; line-height: 1.4;">
+                                <strong>[SIMULATED DEMO PNR]</strong> PNR <strong>R7X2K9</strong> was generated by browser automation against the mock airline portal for local demonstration. In production, Flyo connects to live NDC/GDS airline reservation gateways to issue certified airline PNRs and e-tickets.
+                            </div>
                             <div class="pnr-rescue-display">
-                                <span class="pnr-rescue-label">New Confirmed PNR</span>
+                                <span class="pnr-rescue-label">Simulated Demo PNR [MOCK PORTAL AUTOMATION]</span>
                                 <span class="pnr-rescue-code" id="rescued-pnr-code">R7X2K9</span>
-                                <span style="background: #16a34a; color: white; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 9999px;">IDEMPOTENT &middot; VERIFIED</span>
                             </div>
                             <div class="stage4-status-tray" id="stage4-status-tray" style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem; font-size: 0.75rem;">
                                 <span class="badge" id="rescued-ticket-badge" style="background: #0284c7; color: white; display: none;">Ticket: None</span>
@@ -354,7 +371,7 @@
                                 <span class="badge" id="rescued-correlation-badge" style="background: #475569; color: white; display: none;">Trace: None</span>
                             </div>
                             <div class="screenshot-tray" id="screenshot-tray">
-                                <span style="font-size: 0.8rem; font-weight: 600; color: #166534;" id="booking-audit-trail-label">Provider Verified Reservation &middot; Order Confirmed &middot; E-Ticket Issued</span>
+                                <span style="font-size: 0.8rem; font-weight: 600; color: #166534;" id="booking-audit-trail-label">Mock Airline Portal Automation &middot; Form Submitted &middot; 4 Audit Screenshots Captured</span>
                             </div>
                         </div>
 
