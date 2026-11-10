@@ -56,20 +56,22 @@
                 <!-- Top Section Navigation Tabs -->
                 <nav class="platform-nav-bar">
                     <button class="platform-tab-btn active" id="tab-monitor" onclick="switchSectionView('monitor')">
-                        Disruption Monitor
+                        Trip Monitor
                     </button>
-                    <button class="platform-tab-btn" id="tab-ananya" onclick="switchSectionView('ananya')">
-                        Incident Recovery <span class="tab-badge tab-badge-active" id="tab-ananya-badge" style="display: none;">Active</span>
+                    <button class="platform-tab-btn" id="tab-incident-recovery" onclick="switchSectionView('incident-recovery')">
+                        Incident Recovery <span class="tab-badge tab-badge-active" id="tab-incident-recovery-badge" style="display: none;">Active</span>
                     </button>
+                    <button class="platform-tab-btn" id="tab-ananya" style="display: none;" aria-hidden="true" onclick="switchSectionView('incident-recovery')"></button>
+                    <span id="tab-ananya-badge" style="display: none;"></span>
                     <button class="platform-tab-btn" id="tab-ops" onclick="switchSectionView('ops')">
                         Operations Control <span class="tab-badge" id="tab-ops-badge" style="background: #059669; color: white;">Live</span>
-                    </button>
-                    <button class="platform-tab-btn" id="tab-monitoring" onclick="switchSectionView('monitoring')">
-                        ML Observability <span class="tab-badge" id="tab-ml-status-badge" style="background: #0284c7; color: white;">v3</span>
                     </button>
                     <button class="platform-tab-btn" id="tab-logs" onclick="switchSectionView('logs')">
                         Audit Trail <span class="tab-badge tab-badge-count" id="tab-logs-count">0</span>
                     </button>
+                    <!-- Compatibility Anchors -->
+                    <button class="platform-tab-btn" id="tab-monitoring" style="display: none;" aria-hidden="true" onclick="switchSectionView('ops')"></button>
+                    <span id="tab-ml-status-badge" style="display: none;"></span>
                     <span id="tab-msg-count" style="display: none;">0</span>
                 </nav>
 
@@ -210,8 +212,9 @@
                     </section>
                 </div>
 
-                <!-- SECTION 2: ACTIVE DISRUPTION CASE (ANANYA SHARMA & RANKED OPTIONS) -->
-                <div class="section-view" id="view-ananya">
+                <!-- SECTION 2: INCIDENT RECOVERY WORKBENCH & RANKED OPTIONS -->
+                <div class="section-view" id="view-incident-recovery">
+                    <div id="view-ananya" style="display: none;" aria-hidden="true"></div>
                     <!-- Dynamic Multi-Case Switcher -->
                     <div id="case-switcher-container" class="case-switcher-container" style="display: none;">
                         <span class="case-switcher-label">Active Disruption Cases:</span>
@@ -221,8 +224,8 @@
                     <section class="card case-card" id="active-case-section">
                         <div class="case-header">
                             <div class="case-title-area">
-                                <span class="case-badge" id="case-badge-type">CRITICAL DISRUPTION</span>
-                                <h2 id="case-heading">Case C1 &mdash; Ananya Sharma</h2>
+                                <span class="case-badge" id="case-badge-type">DISRUPTION INCIDENT</span>
+                                <h2 id="case-heading">Disruption Case Workbench &mdash; Case Selection</h2>
                             </div>
                             <div class="case-state-container">
                                 <span class="case-state-badge" id="case-state">AWAITING_APPROVAL</span>
@@ -232,28 +235,46 @@
                             </div>
                         </div>
 
-                        <!-- Client-Friendly Visual Recovery Stepper -->
+                        <!-- OCC Agent Workflow State Machine Stepper -->
                         <div class="workflow-stepper">
                             <div class="step-item" id="step-1">
                                 <span class="step-circle">1</span>
-                                <span>Disruption Detected</span>
+                                <span>Detected</span>
                             </div>
                             <div class="step-divider" id="step-div-1"></div>
                             <div class="step-item" id="step-2">
                                 <span class="step-circle">2</span>
-                                <span>Options Ranked</span>
+                                <span>Impact Assessed</span>
                             </div>
                             <div class="step-divider" id="step-div-2"></div>
                             <div class="step-item" id="step-3">
                                 <span class="step-circle">3</span>
-                                <span>WhatsApp Approval</span>
+                                <span>Options Generated</span>
                             </div>
                             <div class="step-divider" id="step-div-3"></div>
                             <div class="step-item" id="step-4">
                                 <span class="step-circle">4</span>
-                                <span>Itinerary Rescued</span>
+                                <span>Awaiting Approval</span>
+                            </div>
+                            <div class="step-divider" id="step-div-4"></div>
+                            <div class="step-item" id="step-5">
+                                <span class="step-circle">5</span>
+                                <span>Executing</span>
+                            </div>
+                            <div class="step-divider" id="step-div-5"></div>
+                            <div class="step-item" id="step-6">
+                                <span class="step-circle">6</span>
+                                <span>Provider Confirmed</span>
+                            </div>
+                            <div class="step-divider" id="step-div-6"></div>
+                            <div class="step-item" id="step-7">
+                                <span class="step-circle">7</span>
+                                <span>Recovered</span>
                             </div>
                         </div>
+
+                        <!-- Exceptional State Banner (BLOCKED, UNKNOWN, RECONCILIATION_REQUIRED, MANUAL_INTERVENTION) -->
+                        <div id="case-exception-banner" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600;"></div>
 
                         <!-- Approval Banner (shown when an option is approved) -->
                         <div class="approval-banner" id="approval-banner" style="display: none;">
@@ -448,7 +469,7 @@
                                 </div>
 
                                 <div class="options-list" id="options-list">
-                                    <!-- Options injected dynamically by app.fc74fc0dec.min.js -->
+                                    <!-- Options injected dynamically by app.b1ebdf59bb.min.js -->
                                 </div>
                             </div>
 
@@ -520,241 +541,8 @@
                     </section>
                 </div>
 
-                <!-- SECTION 5: ML OBSERVABILITY & PREDICTION QUALITY -->
-                <div class="section-view" id="view-monitoring" style="display: none;">
-                    <!-- Mandatory Safety & Governance Header -->
-                    <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-                            <div style="display: flex; align-items: center; gap: 0.6rem;">
-                                <span style="background: #15803d; color: white; font-size: 0.72rem; font-weight: 750; padding: 0.2rem 0.55rem; border-radius: 4px; letter-spacing: 0.03em;">
-                                    ML OBSERVABILITY &middot; V3 AVIATION INTELLIGENCE
-                                </span>
-                                <strong style="color: #166534; font-size: 0.95rem;">Model Monitoring &amp; Prediction Quality Governance</strong>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                <span class="badge" id="ml-circuit-badge" style="background: #dcfce7; color: #166534; font-weight: 700; border: 1px solid #86efac;">
-                                    Circuit: CLOSED (0 Failures)
-                                </span>
-                                <span class="badge" id="ml-version-badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700; border: 1px solid #7dd3fc;">
-                                    v3.0.0-aviation-intelligence
-                                </span>
-                                <span class="badge" id="ml-last-refresh-time" style="background: #f1f5f9; color: #475569; font-weight: 600; border: 1px solid #cbd5e1; font-size: 0.72rem;">
-                                    Sync: Ready
-                                </span>
-                                <button class="btn btn-secondary btn-sm" id="refresh-telemetry-btn" onclick="refreshTelemetry(this)" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">
-                                    ↻ Refresh Telemetry
-                                </button>
-                            </div>
-                        </div>
-                        <p style="font-size: 0.8rem; color: #14532d; margin: 0.5rem 0 0; line-height: 1.45;">
-                            <strong>Experimental Supplementary Intelligence:</strong> Machine learning risk predictions are non-authoritative advisory signals. Authoritative decisions remain with the deterministic flight evidence reconciliation engine. Autonomous rebooking and autonomous retraining are strictly forbidden. Mandatory human operator approval is enforced.
-                        </p>
-                    </div>
-
-                    <!-- Active Alerts Banner -->
-                    <div id="ml-alerts-container" style="margin-bottom: 1.25rem;">
-                        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <span style="font-size: 0.8rem; color: #1e40af; font-weight: 600;">System Alert Status: NORMAL &middot; All monitoring thresholds within nominal bounds.</span>
-                        </div>
-                    </div>
-
-                    <!-- Telemetry KPI Cards Grid -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem;">
-                        <!-- Card 1: Prediction Volume -->
-                        <div class="summary-card" style="padding: 1rem;">
-                            <span class="summary-label">Total Predictions Logged</span>
-                            <span class="summary-value" id="ml-total-predictions" style="font-size: 1.4rem;">0</span>
-                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-status-breakdown">
-                                Available: 0 &middot; Geofenced: 0
-                            </div>
-                        </div>
-
-                        <!-- Card 2: Latency -->
-                        <div class="summary-card" style="padding: 1rem;">
-                            <span class="summary-label">Inference Latency (p95)</span>
-                            <span class="summary-value" id="ml-latency-p95" style="font-size: 1.4rem; color: #0284c7;">-- ms</span>
-                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-latency-p50">
-                                Median (p50): -- ms
-                            </div>
-                        </div>
-
-                        <!-- Card 3: Imputation & Quality -->
-                        <div class="summary-card" style="padding: 1rem;">
-                            <span class="summary-label">Feature Imputation Rates</span>
-                            <span class="summary-value" id="ml-imputation-rate" style="font-size: 1.4rem; color: #16a34a;">0.0%</span>
-                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-imputation-detail">
-                                Duration: 0.0% &middot; Distance: 0.0%
-                            </div>
-                        </div>
-
-                        <!-- Card 4: Drift (PSI) -->
-                        <div class="summary-card" style="padding: 1rem;">
-                            <span class="summary-label">Feature &amp; Pred Drift</span>
-                            <span class="summary-value" id="ml-drift-status" style="font-size: 1.4rem; color: #16a34a;">STABLE</span>
-                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-drift-detail">
-                                PSI &lt; 0.10 (vs Baseline)
-                            </div>
-                        </div>
-
-                        <!-- Card 5: Outcome Performance -->
-                        <div class="summary-card" style="padding: 1rem;">
-                            <span class="summary-label">Delayed Outcomes</span>
-                            <span class="summary-value" id="ml-outcomes-evaluated" style="font-size: 1.4rem; color: #475569;">0 / 0</span>
-                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem;" id="ml-brier-detail">
-                                Brier: Pending Evaluation
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Split Workbenches: Live Predictor & Outcome Ingestion -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
-                        <!-- Left Workbench: Interactive Inference Tester -->
-                        <section class="card" style="margin-bottom: 0;">
-                            <div class="card-header" style="padding: 0.85rem 1rem;">
-                                <div>
-                                    <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Live Prediction Tester</h3>
-                                    <p class="section-desc" style="font-size: 0.75rem; margin: 0.15rem 0 0;">Test real model inference, geofencing &amp; circuit breaker fallback</p>
-                                </div>
-                                <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('6E501')">6E501 (DEL-BOM)</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('AI839')">AI839 (HYD-DEL)</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('UK927')">UK927 (BOM-BLR)</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('UA240')">UA240 (ORD-SFO)</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="fillPredictPreset('SY350')">SY350 (ORD-DFW)</button>
-                                </div>
-                            </div>
-                            <div style="padding: 1rem;">
-                                <form id="ml-predict-form" onsubmit="submitLivePrediction(event)">
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Flight Number *</label>
-                                            <input type="text" id="ml-pred-flight" value="UA240" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Carrier Code *</label>
-                                            <input type="text" id="ml-pred-carrier" value="UA" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                    </div>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Origin Airport *</label>
-                                            <input type="text" id="ml-pred-origin" value="ORD" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Dest Airport *</label>
-                                            <input type="text" id="ml-pred-dest" value="SFO" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                    </div>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.85rem;">
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Dep Time (HH:MM)</label>
-                                            <input type="text" id="ml-pred-deptime" value="18:45" style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Departure Date</label>
-                                            <input type="date" id="ml-pred-depdate" value="2024-07-15" style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <button type="submit" class="btn btn-primary btn-sm" id="ml-predict-btn" style="background: #0284c7; color: white;">
-                                            ⚡ Execute Inference
-                                        </button>
-                                        <span id="ml-predict-latency" style="font-size: 0.75rem; color: #64748b;">Ready</span>
-                                    </div>
-                                </form>
-                                <div id="ml-predict-result" style="margin-top: 0.85rem; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.8rem; min-height: 90px;">
-                                    <span style="color: #64748b;">Prediction output will appear here.</span>
-                                </div>
-                            </div>
-                        </section>
-
-                        <!-- Right Workbench: Ground Truth Delayed Outcome Ingest -->
-                        <section class="card" style="margin-bottom: 0;">
-                            <div class="card-header" style="padding: 0.85rem 1rem;">
-                                <div>
-                                    <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Delayed Ground Truth Ingestion</h3>
-                                    <p class="section-desc" style="font-size: 0.75rem; margin: 0.15rem 0 0;">Ingest actual delay/cancellation to evaluate model calibration &amp; Brier scores</p>
-                                </div>
-                            </div>
-                            <div style="padding: 1rem;">
-                                <form id="ml-outcome-form" onsubmit="submitGroundTruthOutcome(event)">
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Flight Number *</label>
-                                            <input type="text" id="ml-out-flight" value="UA240" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Carrier Code *</label>
-                                            <input type="text" id="ml-out-carrier" value="UA" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                    </div>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Origin *</label>
-                                            <input type="text" id="ml-out-origin" value="ORD" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Destination *</label>
-                                            <input type="text" id="ml-out-dest" value="SFO" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                    </div>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Flight Date *</label>
-                                            <input type="date" id="ml-out-date" value="2024-07-15" required style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 0.2rem;">Actual Dep Delay (Min)</label>
-                                            <input type="number" id="ml-out-delay" value="145" style="width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.82rem;">
-                                        </div>
-                                    </div>
-                                    <div style="margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
-                                        <input type="checkbox" id="ml-out-cancelled">
-                                        <label for="ml-out-cancelled" style="font-size: 0.78rem; font-weight: 600; color: #334155;">Flight Was Actually Cancelled</label>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <button type="submit" class="btn btn-primary btn-sm" id="ml-outcome-btn" style="background: #059669; color: white;">
-                                            📥 Ingest &amp; Match Ground Truth
-                                        </button>
-                                        <span id="ml-outcome-feedback" style="font-size: 0.75rem; color: #64748b;">Ready</span>
-                                    </div>
-                                </form>
-                                <div id="ml-outcome-result" style="margin-top: 0.85rem; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.8rem; min-height: 90px;">
-                                    <span style="color: #64748b;">Outcome ingestion status and matching updates will appear here.</span>
-                                </div>
-                            </div>
-                        </section>
-                    </div>
-
-                    <!-- Model Governance & Checksum Integrity Card -->
-                    <section class="card">
-                        <div class="card-header" style="padding: 0.85rem 1rem;">
-                            <div>
-                                <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Model Governance &amp; Artifact Checksums</h3>
-                                <p class="section-desc" style="font-size: 0.75rem; margin: 0.15rem 0 0;">Cryptographic SHA-256 hashes, dataset coverage &amp; rollback readiness</p>
-                            </div>
-                            <div>
-                                <span class="badge" style="background: #f1f5f9; color: #334155; font-weight: 600;">9 Artifacts Verified</span>
-                            </div>
-                        </div>
-                        <div style="padding: 1rem; font-size: 0.8rem;" id="ml-governance-container">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
-                                <div>
-                                    <strong style="color: #0f172a;">Active Model Version:</strong> v2.0.0-multiseason<br>
-                                    <strong style="color: #0f172a;">Historical Records:</strong> 1,707,271 records (BTS 2024 Jan, Apr, Jul)<br>
-                                    <strong style="color: #0f172a;">Feature Dimensionality:</strong> 79 features (strictly future-leakage free)<br>
-                                    <strong style="color: #0f172a;">Airspace Coverage:</strong> 334 US domestic BTS airports &middot; 15 carriers
-                                </div>
-                                <div>
-                                    <strong style="color: #0f172a;">Rollback Target:</strong> v1_backup (January 2024 single-month)<br>
-                                    <strong style="color: #0f172a;">Rollback Readiness:</strong> <span style="color: #16a34a; font-weight: 700;">READY (v1 artifacts present in ml/artifacts/v1_backup)</span><br>
-                                    <strong style="color: #0f172a;">Storage Engine:</strong> SQLite WAL mode (zero PII logged)<br>
-                                    <strong style="color: #0f172a;">Circuit Breaker:</strong> 3 consecutive failures threshold &middot; 5,000ms cooldown
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                </div>
+                <!-- SECTION 5: ML OBSERVABILITY (Compatibility Anchor) -->
+                <div class="section-view" id="view-monitoring" style="display: none;"></div>
 
                 <!-- SECTION 6: OPERATIONS CONTROL CENTER -->
                 <div class="section-view" id="view-ops" style="display: none;">
@@ -871,6 +659,145 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- Operational ML Model Health & Governance Panel -->
+                    <section class="card" id="ops-ml-health-panel" style="margin-bottom: 1.5rem;">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                <span style="background: #0284c7; color: white; font-size: 0.68rem; font-weight: 750; padding: 0.15rem 0.45rem; border-radius: 4px;">STAGE 8 ML</span>
+                                <h3 style="font-size: 1rem; font-weight: 700; color: #0f172a; margin: 0;">Operational ML Model Health &amp; Drift Telemetry</h3>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <span class="badge" id="ml-circuit-badge" style="background: #dcfce7; color: #166534; font-weight: 700; border: 1px solid #86efac;">
+                                    Circuit: CLOSED (0 Failures)
+                                </span>
+                                <span class="badge" id="ml-version-badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700; border: 1px solid #7dd3fc;">
+                                    v3.0.0-aviation-intelligence
+                                </span>
+                                <span class="badge" id="ml-last-refresh-time" style="background: #f1f5f9; color: #475569; font-weight: 600; border: 1px solid #cbd5e1; font-size: 0.72rem;">
+                                    Sync: Ready
+                                </span>
+                                <button class="btn btn-secondary btn-sm" id="refresh-telemetry-btn" onclick="refreshTelemetry(this)" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">
+                                    ↻ Refresh Telemetry
+                                </button>
+                            </div>
+                        </div>
+                        <div style="padding: 1rem;">
+                            <!-- Telemetry KPI Cards Grid -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+                                <div class="summary-card" style="padding: 0.85rem;">
+                                    <span class="summary-label">Total Predictions Logged</span>
+                                    <span class="summary-value" id="ml-total-predictions" style="font-size: 1.3rem;">0</span>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.25rem;" id="ml-status-breakdown">Available: 0</div>
+                                </div>
+                                <div class="summary-card" style="padding: 0.85rem;">
+                                    <span class="summary-label">Inference Latency (p95)</span>
+                                    <span class="summary-value" id="ml-latency-p95" style="font-size: 1.3rem; color: #0284c7;">-- ms</span>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.25rem;" id="ml-latency-p50">Median (p50): -- ms</div>
+                                </div>
+                                <div class="summary-card" style="padding: 0.85rem;">
+                                    <span class="summary-label">Feature Imputation Rate</span>
+                                    <span class="summary-value" id="ml-imputation-rate" style="font-size: 1.3rem; color: #16a34a;">0.0%</span>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.25rem;" id="ml-imputation-detail">Airport Coordinate Geometry</div>
+                                </div>
+                                <div class="summary-card" style="padding: 0.85rem;">
+                                    <span class="summary-label">Feature &amp; Pred Drift</span>
+                                    <span class="summary-value" id="ml-drift-status" style="font-size: 1.3rem; color: #16a34a;">STABLE</span>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.25rem;" id="ml-drift-detail">PSI &lt; 0.10</div>
+                                </div>
+                                <div class="summary-card" style="padding: 0.85rem;">
+                                    <span class="summary-label">Delayed Outcomes &amp; Brier</span>
+                                    <span class="summary-value" id="ml-outcomes-evaluated" style="font-size: 1.3rem; color: #475569;">0 / 0</span>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.25rem;" id="ml-brier-detail">Calibration: Nominal</div>
+                                </div>
+                            </div>
+
+                            <!-- Feature Correlation & Model Explainability -->
+                            <div style="margin-bottom: 1rem; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                                <div style="font-size: 0.78rem; font-weight: 700; color: #334155; margin-bottom: 0.35rem;">Model Feature Importance (Tree-SHAP Global Attribution)</div>
+                                <div id="ml-feature-importance-list" style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                                    <!-- Injected dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Live Inference Audit Stream -->
+                            <div class="table-container">
+                                <table class="data-table" style="font-size: 0.78rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>Flight</th>
+                                            <th>Route</th>
+                                            <th>Pred P(Delay)</th>
+                                            <th>Latency</th>
+                                            <th>SHAP Attribution</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ml-inference-tbody">
+                                        <tr>
+                                            <td colspan="7" class="loading-state" style="text-align: center; color: #64748b; padding: 1rem;">
+                                                Inference telemetry stream ready.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Isolated Dev Testbench (Collapsed by Default) -->
+                            <details class="dev-tools-accordion" style="margin-top: 1rem; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 0.5rem 0.75rem;">
+                                <summary style="font-size: 0.75rem; font-weight: 700; color: #64748b; cursor: pointer; user-select: none;">
+                                    ⚙ Developer Inference Playground &amp; Ground Truth Ingestion Form (Testing Tool)
+                                </summary>
+                                <div style="margin-top: 0.75rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <div>
+                                        <form id="ml-predict-form" onsubmit="submitLivePrediction(event)">
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.4rem;">
+                                                <input type="text" id="ml-pred-flight" value="UA240" required placeholder="Flight" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                                <input type="text" id="ml-pred-carrier" value="UA" required placeholder="Carrier" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                            </div>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.4rem;">
+                                                <input type="text" id="ml-pred-origin" value="ORD" required placeholder="Origin" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                                <input type="text" id="ml-pred-dest" value="SFO" required placeholder="Dest" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                            </div>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.5rem;">
+                                                <input type="text" id="ml-pred-deptime" value="18:45" placeholder="HH:MM" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                                <input type="date" id="ml-pred-depdate" value="2024-07-15" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                            </div>
+                                            <button type="submit" class="btn btn-primary btn-sm" id="ml-predict-btn" style="font-size: 0.75rem; background: #0284c7; color: white;">
+                                                Execute Test Inference
+                                            </button>
+                                        </form>
+                                        <div id="ml-predict-result" style="margin-top: 0.5rem; font-size: 0.75rem; color: #64748b;">Ready</div>
+                                    </div>
+                                    <div>
+                                        <form id="ml-outcome-form" onsubmit="submitGroundTruthOutcome(event)">
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.4rem;">
+                                                <input type="text" id="ml-out-flight" value="UA240" required placeholder="Flight" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                                <input type="text" id="ml-out-carrier" value="UA" required placeholder="Carrier" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                            </div>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.4rem;">
+                                                <input type="text" id="ml-out-origin" value="ORD" required placeholder="Origin" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                                <input type="text" id="ml-out-dest" value="SFO" required placeholder="Dest" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                            </div>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.5rem;">
+                                                <select id="ml-out-status" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                                    <option value="DELAYED">DELAYED (&ge; 15m)</option>
+                                                    <option value="ON_TIME">ON_TIME (&lt; 15m)</option>
+                                                    <option value="CANCELLED">CANCELLED</option>
+                                                </select>
+                                                <input type="number" id="ml-out-delay-minutes" value="45" placeholder="Delay min" style="padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.78rem;">
+                                            </div>
+                                            <button type="submit" class="btn btn-secondary btn-sm" id="ml-outcome-btn" style="font-size: 0.75rem;">
+                                                Ingest Test Outcome
+                                            </button>
+                                        </form>
+                                        <div id="ml-outcome-result" style="margin-top: 0.5rem; font-size: 0.75rem; color: #64748b;">Ready</div>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
                     </section>
 

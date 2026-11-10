@@ -90,11 +90,14 @@ function toggleOperatorDrawer() {
 }
 
 function switchSectionView(tabName) {
-    if (tabName === "msg") {
-        tabName = "ananya";
+    if (tabName === "msg" || tabName === "ananya") {
+        tabName = "incident-recovery";
+    }
+    if (tabName === "monitoring") {
+        tabName = "ops";
     }
     currentActiveView = tabName;
-    const tabs = ["monitor", "ananya", "logs", "monitoring", "ops"];
+    const tabs = ["monitor", "incident-recovery", "logs", "ops"];
     tabs.forEach(t => {
         const view = document.getElementById(`view-${t}`);
         const btn = document.getElementById(`tab-${t}`);
@@ -116,18 +119,25 @@ function switchSectionView(tabName) {
         }
     });
 
+    const legacyBtn = document.getElementById("tab-ananya");
+    if (legacyBtn) {
+        if (tabName === "incident-recovery") legacyBtn.classList.add("active");
+        else legacyBtn.classList.remove("active");
+    }
+    const legacyView = document.getElementById("view-ananya");
+    if (legacyView) legacyView.style.display = "none";
+
     const activeId = currentActiveCase ? currentActiveCase.id : "C1";
     if (tabName === "logs") {
         fetchAudit(activeId);
-    } else if (tabName === "ananya") {
+    } else if (tabName === "incident-recovery") {
         fetchMessages(activeId);
         fetchOptions(activeId);
     } else if (tabName === "monitor") {
         fetchBookings();
-    } else if (tabName === "monitoring") {
-        fetchMonitoringData();
     } else if (tabName === "ops") {
         fetchOpsData();
+        fetchMonitoringData();
     }
 }
 
@@ -188,7 +198,7 @@ async function fetchOpsData(silent = false) {
                         <td style="color: #b91c1c; font-family: monospace; font-size: 0.75rem;">${c.error || 'Provider Ambiguity'}</td>
                         <td style="font-size: 0.75rem;">${c.manualNextStep || 'Inspect airline portal before retry.'}</td>
                         <td>
-                            <button class="btn btn-sm btn-secondary" onclick="fetchCase('${c.id}'); switchSectionView('ananya');" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                            <button class="btn btn-sm btn-secondary" onclick="fetchCase('${c.id}'); switchSectionView('incident-recovery');" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
                                 Inspect Case →
                             </button>
                         </td>
@@ -347,7 +357,7 @@ async function openCaseForBooking(bookingId) {
             if (targetCase) {
                 currentActiveCase = targetCase;
                 renderCase(targetCase);
-                switchSectionView("ananya");
+                switchSectionView("incident-recovery");
                 await fetchOptions(targetCase.id);
                 await fetchAudit(targetCase.id);
                 await fetchMessages(targetCase.id);
@@ -379,7 +389,7 @@ async function simulateCancellation(bookingId) {
         const rescueCase = await response.json();
         currentActiveCase = rescueCase;
         renderCase(rescueCase);
-        switchSectionView("ananya");
+        switchSectionView("incident-recovery");
         await fetchOptions(rescueCase.id);
         await fetchAudit(rescueCase.id);
         await fetchMessages(rescueCase.id);
@@ -527,21 +537,23 @@ function renderCase(c, silent = false) {
         paxHeaderSub.innerHTML = `<span class="whatsapp-pulse-dot"></span> ${escapeHtml(c.passengerPhone)} &middot; ${escapeHtml(c.state)}`;
     }
 
-    // Update Ananya tab badge
-    const tabAnanyaBadge = document.getElementById("tab-ananya-badge");
-    if (tabAnanyaBadge) {
-        tabAnanyaBadge.style.display = "inline-block";
-        if (c.state === "DONE") {
-            tabAnanyaBadge.textContent = "Rescued";
-            tabAnanyaBadge.style.backgroundColor = "#16a34a";
-        } else if (c.state === "FAILED_ESCALATED" || c.state === "ESCALATED") {
-            tabAnanyaBadge.textContent = "Escalated";
-            tabAnanyaBadge.style.backgroundColor = "#dc2626";
-        } else {
-            tabAnanyaBadge.textContent = "Active";
-            tabAnanyaBadge.style.backgroundColor = "#ef4444";
+    // Update Incident Recovery tab badges
+    ["tab-incident-recovery-badge", "tab-ananya-badge"].forEach(bId => {
+        const badge = document.getElementById(bId);
+        if (badge) {
+            badge.style.display = "inline-block";
+            if (c.state === "DONE") {
+                badge.textContent = "Rescued";
+                badge.style.backgroundColor = "#16a34a";
+            } else if (c.state === "FAILED_ESCALATED" || c.state === "ESCALATED") {
+                badge.textContent = "Escalated";
+                badge.style.backgroundColor = "#dc2626";
+            } else {
+                badge.textContent = "Active";
+                badge.style.backgroundColor = "#ef4444";
+            }
         }
-    }
+    });
 
     // State badge
     const stateEl = document.getElementById("case-state");
@@ -685,50 +697,87 @@ function renderCase(c, silent = false) {
 }
 
 function updateWorkflowStepper(c) {
+    if (!c) return;
     const s1 = document.getElementById("step-1");
     const s2 = document.getElementById("step-2");
     const s3 = document.getElementById("step-3");
     const s4 = document.getElementById("step-4");
+    const s5 = document.getElementById("step-5");
+    const s6 = document.getElementById("step-6");
+    const s7 = document.getElementById("step-7");
     const d1 = document.getElementById("step-div-1");
     const d2 = document.getElementById("step-div-2");
     const d3 = document.getElementById("step-div-3");
+    const d4 = document.getElementById("step-div-4");
+    const d5 = document.getElementById("step-div-5");
+    const d6 = document.getElementById("step-div-6");
+    const exceptionBanner = document.getElementById("case-exception-banner");
 
-    if (!s1 || !s2 || !s3 || !s4) return;
+    const allSteps = [s1, s2, s3, s4, s5, s6, s7].filter(Boolean);
+    const allDivs = [d1, d2, d3, d4, d5, d6].filter(Boolean);
 
-    // Reset classes
-    [s1, s2, s3, s4].forEach(el => el.className = "step-item");
-    [d1, d2, d3].forEach(el => el && (el.className = "step-divider"));
+    allSteps.forEach(el => el.className = "step-item");
+    allDivs.forEach(el => el.className = "step-divider");
 
-    // Step 1: Disruption Detected is completed
-    s1.classList.add("completed");
-    if (d1) d1.classList.add("completed");
+    const state = c.state || "UNKNOWN";
 
-    // Step 2: Passenger Decision & Options
-    const isStep2Active = ["DETECTED", "PASSENGER_NOTIFIED", "AWAITING_PASSENGER_DECISION", "FETCHING_ITINERARY", "SEARCHING_ALTERNATIVES"].includes(c.state);
-    if (isStep2Active) {
-        s2.classList.add("active");
-    } else {
-        s2.classList.add("completed");
-        if (d2) d2.classList.add("completed");
+    // Handle Exceptional States (BLOCKED, RECONCILIATION_REQUIRED, MANUAL_INTERVENTION, UNKNOWN)
+    const isEscalatedOrBlocked = ["ESCALATED", "FAILED_ESCALATED", "LOCKED_OUT", "PASSENGER_DECLINED"].includes(state);
+    const isReconciliation = ["PAYMENT_RECONCILIATION_REQUIRED", "RECONCILING", "PAYMENT_OUTCOME_UNKNOWN"].includes(state);
+    const isManual = ["MANUAL_INTERVENTION_REQUIRED", "BOOKING_FAILED", "PAYMENT_FAILED", "ITINERARY_FETCH_FAILED", "NO_OPTIONS_AVAILABLE"].includes(state);
+
+    if (exceptionBanner) {
+        if (isEscalatedOrBlocked) {
+            exceptionBanner.style.display = "block";
+            exceptionBanner.style.background = "#fef2f2";
+            exceptionBanner.style.border = "1px solid #f87171";
+            exceptionBanner.style.color = "#991b1b";
+            exceptionBanner.innerHTML = `⚠️ <strong>INCIDENT BLOCKED / ESCALATED:</strong> Automated execution paused (${escapeHtml(state)}). Requires supervisor review.`;
+        } else if (isReconciliation) {
+            exceptionBanner.style.display = "block";
+            exceptionBanner.style.background = "#fffbeb";
+            exceptionBanner.style.border = "1px solid #fbbf24";
+            exceptionBanner.style.color = "#92400e";
+            exceptionBanner.innerHTML = `🔄 <strong>RECONCILIATION REQUIRED:</strong> Ledger or booking outcome confirmation pending (${escapeHtml(state)}). Checking provider sync.`;
+        } else if (isManual) {
+            exceptionBanner.style.display = "block";
+            exceptionBanner.style.background = "#fff7ed";
+            exceptionBanner.style.border = "1px solid #fb923c";
+            exceptionBanner.style.color = "#9a3412";
+            exceptionBanner.innerHTML = `✋ <strong>MANUAL INTERVENTION REQUIRED:</strong> Discrepancy detected during provider execution (${escapeHtml(state)}). Action queued for operator desk.`;
+        } else {
+            exceptionBanner.style.display = "none";
+        }
     }
 
-    // Step 3: Passenger OTP & Approval
-    const isStep3Completed = !!c.approvedOptionId || !!c.passengerOtpVerifiedAt || ["PASSENGER_VERIFIED", "PAYMENT_AUTH_PENDING", "REBOOKING", "VERIFYING_BOOKING", "DONE"].includes(c.state);
-    const isStep3Active = ["OPTIONS_READY", "AWAITING_APPROVAL", "AWAITING_OPTION_SELECTION", "OPTION_SELECTED", "REVALIDATING_OPTION", "AWAITING_PASSENGER_CONFIRMATION", "AWAITING_PASSENGER_OTP", "OTP_FAILED"].includes(c.state);
-
-    if (isStep3Completed) {
-        s3.classList.add("completed");
-        if (d3) d3.classList.add("completed");
-    } else if (isStep3Active) {
-        s3.classList.add("active");
+    // OCC State Stage determination (1 to 7)
+    let currentStage = 1;
+    if (state === "DETECTED") {
+        currentStage = 1;
+    } else if (["PASSENGER_NOTIFIED", "AWAITING_PASSENGER_DECISION", "FETCHING_ITINERARY"].includes(state)) {
+        currentStage = 2;
+    } else if (["SEARCHING_ALTERNATIVES", "OPTIONS_READY", "AWAITING_OPTION_SELECTION", "OPTION_SELECTED", "REVALIDATING_OPTION", "REFRESHING_ALTERNATIVES"].includes(state)) {
+        currentStage = 3;
+    } else if (["AWAITING_APPROVAL", "AWAITING_PASSENGER_CONFIRMATION", "AWAITING_PASSENGER_OTP", "OTP_FAILED", "APPROVED", "PASSENGER_VERIFIED", "VERIFYING_AGENCY_APPROVAL", "AGENCY_APPROVAL_REQUIRED", "MANUAL_APPROVAL_PENDING"].includes(state)) {
+        currentStage = 4;
+    } else if (["PAYMENT_INSTRUMENT_READY", "PAYMENT_AUTH_PENDING", "PAYMENT_AUTHORIZED", "PAYMENT_CAPTURED", "PAYMENT_VERIFIED", "REBOOKING"].includes(state)) {
+        currentStage = 5;
+    } else if (["VERIFYING_BOOKING", "VERIFYING_TICKET"].includes(state)) {
+        currentStage = 6;
+    } else if (state === "DONE" || state === "RECOVERED") {
+        currentStage = 7;
     }
 
-    // Step 4: Rebooking Rescued
-    if (c.state === "DONE") {
-        s4.classList.add("completed");
-    } else if (["REBOOKING", "VERIFYING_BOOKING"].includes(c.state)) {
-        s4.classList.add("active");
-    }
+    // Mark stages 1..7
+    allSteps.forEach((stepEl, idx) => {
+        const stepNum = idx + 1;
+        if (stepNum < currentStage || (stepNum === 7 && (state === "DONE" || state === "RECOVERED"))) {
+            stepEl.classList.add("completed");
+            if (allDivs[idx]) allDivs[idx].classList.add("completed");
+        } else if (stepNum === currentStage) {
+            stepEl.classList.add("active");
+        }
+    });
 }
 
 async function fetchPaymentDetails(caseId) {
@@ -1186,6 +1235,25 @@ function renderOptions(options) {
                             ${connectionText} ${opt.connectionMinutes >= 120 ? '(&ge; 120m Safe)' : '(&lt; 120m Unsafe)'}
                         </span>
                     </div>
+                    <div class="meta-item" style="grid-column: 1 / -1; background: #f8fafc; padding: 0.5rem 0.65rem; border-radius: 4px; border: 1px solid #e2e8f0;">
+                        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; font-size: 0.76rem;">
+                            <div>
+                                <strong>Hub:</strong> ${escapeHtml(opt.route && opt.route.includes("BOM") ? "BOM (CSMIA)" : (opt.route && opt.route.includes("DEL") ? "DEL (IGIA)" : "Transit Hub"))} 
+                                &middot; <strong>Published MCT:</strong> ${(opt.route && (opt.route.includes("BOM") || opt.route.includes("DEL"))) ? "90m (D-I)" : "75m"} 
+                                &middot; <strong>Flyo Policy:</strong> 120m
+                            </div>
+                            <div>
+                                <strong>Actual Buffer:</strong> ${opt.connectionMinutes > 0 ? opt.connectionMinutes + 'm' : '0m'} 
+                                &middot; <strong>Safety Margin:</strong> 
+                                <span style="font-weight:700; color:${opt.connectionMinutes >= 120 ? '#16a34a' : '#dc2626'}">
+                                    ${opt.connectionMinutes >= 120 ? '+' + (opt.connectionMinutes - 120) + 'm vs Policy' : (opt.connectionMinutes - 120) + 'm (Violates Policy)'}
+                                </span>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.7rem; color: #64748b; margin-top: 0.25rem;">
+                            <strong>Rule Source:</strong> DGCA / IATA Published Airport MCT Matrix &amp; Flyo International Protection Policy v2.4
+                        </div>
+                    </div>
                     ${riskFactors ? `<div class="meta-item" style="grid-column: 1 / -1;"><strong>Risk Analysis:</strong> <span style="color:#64748b; font-size:0.8rem;">${escapeHtml(riskFactors)}</span></div>` : ''}
                 </div>
 
@@ -1394,21 +1462,23 @@ function renderBookings(bookings) {
     const monitoredCountNav = document.getElementById("monitored-count");
     if (monitoredCountNav) monitoredCountNav.textContent = `${bookings.length} Active`;
 
-    // Update Case Recovery Nav Tab Badge
-    const tabAnanyaBadge = document.getElementById("tab-ananya-badge");
-    if (tabAnanyaBadge) {
-        if (blockedBookings.length > 0) {
-            tabAnanyaBadge.style.display = "inline-block";
-            tabAnanyaBadge.textContent = `${blockedBookings.length} Blocked`;
-            tabAnanyaBadge.style.backgroundColor = "#dc2626";
-        } else if (rescuedBookings.length > 0) {
-            tabAnanyaBadge.style.display = "inline-block";
-            tabAnanyaBadge.textContent = `${rescuedBookings.length} Rescued`;
-            tabAnanyaBadge.style.backgroundColor = "#16a34a";
-        } else {
-            tabAnanyaBadge.style.display = "none";
+    // Update Incident Recovery Nav Tab Badges
+    ["tab-incident-recovery-badge", "tab-ananya-badge"].forEach(bId => {
+        const badge = document.getElementById(bId);
+        if (badge) {
+            if (blockedBookings.length > 0) {
+                badge.style.display = "inline-block";
+                badge.textContent = `${blockedBookings.length} Blocked`;
+                badge.style.backgroundColor = "#dc2626";
+            } else if (rescuedBookings.length > 0) {
+                badge.style.display = "inline-block";
+                badge.textContent = `${rescuedBookings.length} Rescued`;
+                badge.style.backgroundColor = "#16a34a";
+            } else {
+                badge.style.display = "none";
+            }
         }
-    }
+    });
 
     // Render Hero Disruption Hub
     const heroCallout = document.getElementById("hero-callout");
@@ -1669,7 +1739,7 @@ async function submitRadarAlert(e) {
             await fetchWhatsAppOperatorChat();
             // Automatically switch to Case Recovery tab if C1 affected
             if (data.affectedCases && data.affectedCases.length > 0) {
-                switchSectionView('ananya');
+                switchSectionView('incident-recovery');
             }
             alert(data.message);
         } else {
@@ -1925,7 +1995,7 @@ async function sendWhatsAppOperatorCommand(command, buttonId = null, senderPhone
         // Auto-switch view tab to track action
         const cmdStr = (command || buttonId || "").toUpperCase();
         if (cmdStr.includes("DISRUPT") || cmdStr.includes("APPROVE") || cmdStr.includes("REBOOK") || cmdStr.includes("OTP")) {
-            switchSectionView("ananya");
+            switchSectionView("incident-recovery");
         } else if (cmdStr.includes("AUDIT")) {
             switchSectionView("logs");
         } else if (cmdStr.includes("STATUS") || cmdStr.includes("BOOKINGS")) {

@@ -30,6 +30,7 @@ const requiredSelectors = [
     "ml-imputation-rate",
     "ml-drift-status",
     "ml-outcomes-evaluated",
+    "view-incident-recovery",
     "view-ananya"
 ];
 
