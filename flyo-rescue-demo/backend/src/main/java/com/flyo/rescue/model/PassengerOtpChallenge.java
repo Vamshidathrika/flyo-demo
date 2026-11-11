@@ -29,6 +29,9 @@ public class PassengerOtpChallenge {
     private LocalDateTime invalidatedAt;
     private String invalidatedReason;
     private String permittedAction = "REBOOK_CONFIRMATION";
+    private String boundRoute;
+    private String boundFlight;
+    private int lockVersion = 0;
 
     public PassengerOtpChallenge() {
     }
@@ -191,5 +194,29 @@ public class PassengerOtpChallenge {
 
     public void setPermittedAction(String permittedAction) {
         this.permittedAction = permittedAction;
+    }
+
+    public String getBoundRoute() {
+        return boundRoute;
+    }
+
+    public void setBoundRoute(String boundRoute) {
+        this.boundRoute = boundRoute;
+    }
+
+    public String getBoundFlight() {
+        return boundFlight;
+    }
+
+    public void setBoundFlight(String boundFlight) {
+        this.boundFlight = boundFlight;
+    }
+
+    public int getLockVersion() {
+        return lockVersion;
+    }
+
+    public void setLockVersion(int lockVersion) {
+        this.lockVersion = lockVersion;
     }
 }

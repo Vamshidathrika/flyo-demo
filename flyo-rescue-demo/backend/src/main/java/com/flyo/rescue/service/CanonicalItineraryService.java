@@ -37,6 +37,8 @@ public class CanonicalItineraryService {
     private final FlightSegmentRepository segmentRepository;
     private final RescueCaseRepository caseRepository;
     private final RebookOptionRepository optionRepository;
+    private final com.flyo.rescue.repository.PassengerOtpChallengeRepository otpChallengeRepository;
+    private final FlightSearchService flightSearchService;
     private final CaseStateMachineService stateMachineService;
     private final AuditService auditService;
 
@@ -44,12 +46,16 @@ public class CanonicalItineraryService {
                                      FlightSegmentRepository segmentRepository,
                                      RescueCaseRepository caseRepository,
                                      RebookOptionRepository optionRepository,
+                                     com.flyo.rescue.repository.PassengerOtpChallengeRepository otpChallengeRepository,
+                                     FlightSearchService flightSearchService,
                                      CaseStateMachineService stateMachineService,
                                      AuditService auditService) {
         this.bookingRepository = bookingRepository;
         this.segmentRepository = segmentRepository;
         this.caseRepository = caseRepository;
         this.optionRepository = optionRepository;
+        this.otpChallengeRepository = otpChallengeRepository;
+        this.flightSearchService = flightSearchService;
         this.stateMachineService = stateMachineService;
         this.auditService = auditService;
     }
@@ -361,15 +367,69 @@ public class CanonicalItineraryService {
     }
 
     /**
-     * Phase 4 Server-Side Reconciliation Action.
+     * Phase 4 & Stage 14 Hardened Server-Side Reconciliation Action.
+     * Enforces operator authentication, tenant isolation, booking verification,
+     * OTP invalidation, approval revocation, version bump, and safe option regeneration.
      */
     @Transactional
     public RescueCase reconcileCase(String caseId, String operator) {
+        if (operator == null || operator.trim().isBlank() || "anonymous".equalsIgnoreCase(operator.trim())) {
+            throw new SecurityException("401 Unauthorized: Reconciliation requires an authenticated operator identity.");
+        }
+
         RescueCase rescueCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
 
+        String currentTenant = com.flyo.rescue.security.TenantContext.getTenantId();
+        if (rescueCase.getTenantId() != null && currentTenant != null
+                && !currentTenant.equalsIgnoreCase("default")
+                && !currentTenant.equalsIgnoreCase("tenant_default")
+                && !rescueCase.getTenantId().equalsIgnoreCase(currentTenant)) {
+            throw new SecurityException(String.format("403 Forbidden: Tenant mismatch. Case belongs to %s but requested by %s",
+                    rescueCase.getTenantId(), currentTenant));
+        }
+
         Booking booking = bookingRepository.findById(rescueCase.getBookingId())
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + rescueCase.getBookingId()));
+
+        if (booking.getTenantId() != null && rescueCase.getTenantId() != null
+                && !booking.getTenantId().equalsIgnoreCase(rescueCase.getTenantId())) {
+            throw new SecurityException("403 Forbidden: Underlying booking tenant does not match rescue case tenant.");
+        }
+
+        // Invalidate all pending/active OTP challenges for this case
+        List<com.flyo.rescue.model.PassengerOtpChallenge> pendingChallenges = otpChallengeRepository.findByCaseIdAndInvalidatedFalse(caseId);
+        for (com.flyo.rescue.model.PassengerOtpChallenge ch : pendingChallenges) {
+            ch.setInvalidated(true);
+            ch.setInvalidatedAt(LocalDateTime.now());
+            ch.setInvalidatedReason("RECONCILIATION_RESET");
+            otpChallengeRepository.save(ch);
+        }
+        if (!pendingChallenges.isEmpty()) {
+            auditService.logEvent(caseId, "OTP_CHALLENGE_REVOKED", operator,
+                    "Revoked " + pendingChallenges.size() + " active/pending OTP challenge(s) due to authoritative reconciliation.");
+        }
+
+        // Invalidate old approvals and selected options
+        rescueCase.setApprovedOptionId(null);
+        rescueCase.setSelectedOptionId(null);
+        rescueCase.setSelectedFlight(null);
+        rescueCase.setApprovedBy(null);
+        rescueCase.setApprovedAt(null);
+
+        // Invalidate and delete stale recovery options
+        List<RebookOption> oldOptions = optionRepository.findByCaseIdOrderByRankAsc(caseId);
+        if (!oldOptions.isEmpty()) {
+            optionRepository.deleteAll(oldOptions);
+            auditService.logEvent(caseId, "RECOVERY_OPTIONS_INVALIDATED", operator,
+                    "Invalidated and purged " + oldOptions.size() + " stale recovery option(s).");
+        }
+
+        // Version-controlled itinerary bump
+        long oldVersion = booking.getItineraryVersion() != null ? booking.getItineraryVersion() : 1L;
+        long newVersion = oldVersion + 1;
+        booking.setItineraryVersion(newVersion);
+        bookingRepository.save(booking);
 
         List<FlightSegment> segments = normalizeAndPersistSegments(booking);
         if (segments.isEmpty()) {
@@ -388,11 +448,13 @@ public class CanonicalItineraryService {
         rescueCase.setOriginAirport(primarySegment.getOriginAirport());
         rescueCase.setDestinationAirport(primarySegment.getDestinationAirport());
         rescueCase.setScheduledDeparture(primarySegment.getScheduledDeparture());
-        rescueCase.setItineraryVersion(booking.getItineraryVersion());
+        rescueCase.setItineraryVersion(newVersion);
         rescueCase.setFinalDestination(booking.getFinalDestination());
         rescueCase.setOnwardSegmentsCount(segments.size() > 1 ? (segments.size() - 1) : 0);
         rescueCase.setCancelledSegment(primarySegment.getRoute() + " (" + primarySegment.getFlightNumber() + " " + primarySegment.getScheduledDeparture() + ")");
         rescueCase.setMismatchReason(null);
+        rescueCase.setLastReconciledAt(LocalDateTime.now());
+        rescueCase.setReconciledBy(operator);
 
         // Recalculate impact text cleanly
         if (booking.isMultiSegment()) {
@@ -409,7 +471,7 @@ public class CanonicalItineraryService {
         stateMachineService.transition(
                 rescueCase,
                 CaseStateMachineService.STATE_OPTIONS_READY,
-                operator != null && !operator.isBlank() ? operator : "Flyo Reconciliation Engine",
+                operator,
                 "Server-side reconciliation successful. Canonical itinerary and segments re-established."
         );
 
@@ -417,12 +479,27 @@ public class CanonicalItineraryService {
 
         auditService.logEvent(
                 caseId,
+                "INCIDENT_RECONCILED",
+                operator,
+                String.format("Case %s authoritatively reconciled by %s. Itinerary bumped from v%d to v%d. Old options and OTPs invalidated.",
+                        caseId, operator, oldVersion, newVersion)
+        );
+
+        auditService.logEvent(
+                caseId,
                 "INCIDENT_SEGMENT_VALIDATED",
-                operator != null ? operator : "Flyo Reconciliation Engine",
+                operator,
                 String.format("Segment %s (%s %s) validated. Final destination: %s. Version: v%d.",
                         primarySegment.getId(), primarySegment.getFlightNumber(), primarySegment.getRoute(),
-                        booking.getFinalDestination(), booking.getItineraryVersion())
+                        booking.getFinalDestination(), newVersion)
         );
+
+        // Safe regeneration of recovery options for the new itinerary version
+        List<RebookOption> freshOptions = flightSearchService.findCandidateOptions(caseId, booking, primarySegment, booking.getFinalDestination());
+        for (RebookOption opt : freshOptions) {
+            opt.setItineraryVersion(newVersion);
+        }
+        optionRepository.saveAll(freshOptions);
 
         return saved;
     }

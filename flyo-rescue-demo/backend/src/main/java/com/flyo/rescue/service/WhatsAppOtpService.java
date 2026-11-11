@@ -35,19 +35,24 @@ public class WhatsAppOtpService {
     // In-memory store: phone -> active OtpChallenge
     private final Map<String, OtpChallenge> activeOtps = new ConcurrentHashMap<>();
     private final Map<String, Integer> failedAttempts = new ConcurrentHashMap<>();
-    private final Map<String, Instant> lockoutUntil = new ConcurrentHashMap<>();
+    private final com.flyo.rescue.repository.PassengerPhoneLockRepository phoneLockRepository;
+
+    public WhatsAppOtpService(com.flyo.rescue.repository.PassengerPhoneLockRepository phoneLockRepository) {
+        this.phoneLockRepository = phoneLockRepository;
+    }
 
     /**
      * Check if a phone number is currently rate-limited or locked out.
      */
     public boolean isLockedOut(String phone) {
         String cleanPhone = cleanPhone(phone);
-        Instant lockout = lockoutUntil.get(cleanPhone);
-        if (lockout != null) {
-            if (Instant.now().isBefore(lockout)) {
+        Optional<com.flyo.rescue.model.PassengerPhoneLock> lockOpt = phoneLockRepository.findById(cleanPhone);
+        if (lockOpt.isPresent()) {
+            java.time.LocalDateTime until = lockOpt.get().getLockedUntil();
+            if (until != null && java.time.LocalDateTime.now().isBefore(until)) {
                 return true;
             } else {
-                lockoutUntil.remove(cleanPhone);
+                phoneLockRepository.deleteById(cleanPhone);
                 failedAttempts.remove(cleanPhone);
             }
         }
@@ -119,16 +124,23 @@ public class WhatsAppOtpService {
             int failures = failedAttempts.merge(cleanPhone, 1, Integer::sum);
             log.warn("[WhatsApp Security OTP] Mismatch for phone {}: failure count = {}/{}", cleanPhone, failures, MAX_FAILED_ATTEMPTS);
             if (failures >= MAX_FAILED_ATTEMPTS) {
-                Instant lockout = Instant.now().plus(LOCKOUT_MINUTES, ChronoUnit.MINUTES);
-                lockoutUntil.put(cleanPhone, lockout);
+                com.flyo.rescue.model.PassengerPhoneLock lock = new com.flyo.rescue.model.PassengerPhoneLock(
+                        cleanPhone,
+                        "default",
+                        failures,
+                        java.time.LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES),
+                        "EXCESSIVE_FAILED_OPERATOR_OTP"
+                );
+                phoneLockRepository.save(lock);
                 activeOtps.remove(cleanPhone);
-                log.error("[WhatsApp Security OTP] Phone {} locked out until {} due to {} consecutive failed attempts", cleanPhone, lockout, failures);
+                log.error("[WhatsApp Security OTP] Phone {} locked out in DB due to {} consecutive failed attempts", cleanPhone, failures);
             }
             return Optional.empty();
         }
 
         // Reset failed attempts on success
         failedAttempts.remove(cleanPhone);
+        phoneLockRepository.deleteById(cleanPhone);
 
         // Mark verified and remove from active
         OtpChallenge verifiedChallenge = new OtpChallenge(
@@ -160,11 +172,11 @@ public class WhatsAppOtpService {
             String clean = cleanPhone(phone);
             activeOtps.remove(clean);
             failedAttempts.remove(clean);
-            lockoutUntil.remove(clean);
+            phoneLockRepository.deleteById(clean);
         } else {
             activeOtps.clear();
             failedAttempts.clear();
-            lockoutUntil.clear();
+            phoneLockRepository.deleteAll();
         }
     }
 

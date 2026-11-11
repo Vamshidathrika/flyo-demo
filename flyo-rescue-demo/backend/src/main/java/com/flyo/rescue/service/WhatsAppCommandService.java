@@ -38,6 +38,7 @@ public class WhatsAppCommandService {
     private final PaymentSettlementService paymentSettlementService;
     private final MessageService messageService;
     private final PassengerRescueWorkflowService passengerRescueWorkflowService;
+    private final DistributedIdempotencyService distributedIdempotencyService;
 
     // Track active case per sender phone for conversational context
     private final Map<String, String> lastActiveCaseByPhone = new ConcurrentHashMap<>();
@@ -57,7 +58,8 @@ public class WhatsAppCommandService {
                                   com.flyo.rescue.repository.RebookOptionRepository optionRepository,
                                   PaymentSettlementService paymentSettlementService,
                                   MessageService messageService,
-                                  @org.springframework.context.annotation.Lazy PassengerRescueWorkflowService passengerRescueWorkflowService) {
+                                  @org.springframework.context.annotation.Lazy PassengerRescueWorkflowService passengerRescueWorkflowService,
+                                  DistributedIdempotencyService distributedIdempotencyService) {
         this.caseService = caseService;
         this.bookingService = bookingService;
         this.config = config;
@@ -71,25 +73,35 @@ public class WhatsAppCommandService {
         this.paymentSettlementService = paymentSettlementService;
         this.messageService = messageService;
         this.passengerRescueWorkflowService = passengerRescueWorkflowService;
+        this.distributedIdempotencyService = distributedIdempotencyService;
 
         // Pre-authenticate default operator phone for seamless local dashboard operations
         if (config.getOperatorPhone() != null && !config.getOperatorPhone().isBlank()) {
-            authenticatedSessions.add(cleanPhone(config.getOperatorPhone()));
+            String opPhone = cleanPhone(config.getOperatorPhone());
+            authenticatedSessions.add(opPhone);
+            distributedIdempotencyService.tryAcquire("OPERATOR_AUTH_SESSION:" + opPhone, "OPERATOR_SESSION", 86400);
         }
     }
 
     public void authenticateSessionForTest(String phone) {
         if (phone != null) {
-            authenticatedSessions.add(cleanPhone(phone));
+            String cp = cleanPhone(phone);
+            authenticatedSessions.add(cp);
+            distributedIdempotencyService.tryAcquire("OPERATOR_AUTH_SESSION:" + cp, "OPERATOR_SESSION", 86400);
         }
     }
 
     public void clearSessionsForTest() {
+        for (String cp : authenticatedSessions) {
+            distributedIdempotencyService.delete("OPERATOR_AUTH_SESSION:" + cp);
+        }
         authenticatedSessions.clear();
+        distributedIdempotencyService.deleteByPrefix("OPERATOR_AUTH_SESSION:");
     }
 
     public boolean isSessionAuthenticated(String phone) {
-        return authenticatedSessions.contains(cleanPhone(phone));
+        String cp = cleanPhone(phone);
+        return authenticatedSessions.contains(cp) || distributedIdempotencyService.isProcessed("OPERATOR_AUTH_SESSION:" + cp);
     }
 
     public String processInboundMessage(String senderPhone, String messageBody, String buttonReplyId) {
@@ -150,6 +162,7 @@ public class WhatsAppCommandService {
         // 3. LOGOUT
         if (command.equals("LOGOUT") || command.equals("EXIT") || command.equals("SIGN OUT")) {
             authenticatedSessions.remove(cleanPhone(senderPhone));
+            distributedIdempotencyService.delete("OPERATOR_AUTH_SESSION:" + cleanPhone(senderPhone));
             otpService.clear(senderPhone);
             String logoutMsg = "*[Logged Out Successfully]*\nYour operator session has been closed. Reply *HI* to authenticate again.";
             whatsAppClient.sendTextMessage(senderPhone, logoutMsg);
@@ -647,7 +660,9 @@ public class WhatsAppCommandService {
 
             // Check if this was a LOGIN challenge
             if ("LOGIN".equals(challenge.caseId())) {
-                authenticatedSessions.add(cleanPhone(senderPhone));
+                String cp = cleanPhone(senderPhone);
+                authenticatedSessions.add(cp);
+                distributedIdempotencyService.tryAcquire("OPERATOR_AUTH_SESSION:" + cp, "OPERATOR_SESSION", 7200);
                 String successMsg = String.format("""
                         *[Authentication Verified]*
                         *Login Successful!*

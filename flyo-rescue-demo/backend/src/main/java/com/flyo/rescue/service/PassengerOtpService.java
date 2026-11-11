@@ -35,25 +35,29 @@ public class PassengerOtpService {
 
     private static final Logger log = LoggerFactory.getLogger(PassengerOtpService.class);
     private static final int OTP_EXPIRY_MINUTES = 10;
-    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int MAX_FAILED_ATTEMPTS = 3;
     private static final int LOCKOUT_MINUTES = 30;
 
     private final SecureRandom secureRandom = new SecureRandom();
     private final PassengerOtpChallengeRepository repository;
     private final AuditService auditService;
+    private final com.flyo.rescue.repository.PassengerPhoneLockRepository phoneLockRepository;
+    private final DistributedIdempotencyService distributedIdempotencyService;
 
     // Ephemeral cache of active challenge codes for WhatsApp delivery only (cleared upon verification/expiry)
     private final Map<String, String> ephemeralActiveCodes = new ConcurrentHashMap<>();
-    // Rate limit & brute-force lockout: phone -> lockedUntil
-    private final Map<String, LocalDateTime> lockedPhones = new ConcurrentHashMap<>();
-    // Resend cooldown tracking: phone -> lastIssuedTime
-    private final Map<String, LocalDateTime> lastIssuedTimes = new ConcurrentHashMap<>();
+    // Resend cooldown tracking: phone -> lastIssuedTime (distributed idempotency backed)
 
     public record PassengerOtpResult(boolean valid, String reason, PassengerOtpChallenge challenge) {}
 
-    public PassengerOtpService(PassengerOtpChallengeRepository repository, AuditService auditService) {
+    public PassengerOtpService(PassengerOtpChallengeRepository repository,
+                               AuditService auditService,
+                               com.flyo.rescue.repository.PassengerPhoneLockRepository phoneLockRepository,
+                               DistributedIdempotencyService distributedIdempotencyService) {
         this.repository = repository;
         this.auditService = auditService;
+        this.phoneLockRepository = phoneLockRepository;
+        this.distributedIdempotencyService = distributedIdempotencyService;
     }
 
     /**
@@ -91,7 +95,6 @@ public class PassengerOtpService {
 
         repository.save(challenge);
         ephemeralActiveCodes.put(challengeId, rawCode);
-        lastIssuedTimes.put(cleanPhone, now);
 
         auditService.logEvent(
                 caseId,
@@ -167,14 +170,23 @@ public class PassengerOtpService {
 
         String submittedHash = hashOtp(submittedCode != null ? submittedCode.trim() : "");
         if (submittedHash.equals(challenge.getOtpHash())) {
+            // Atomic DB-level CAS to prevent race condition & double verification across distributed workers
+            int updated = repository.atomicConsumeOtp(challenge.getId(), LocalDateTime.now(), MAX_FAILED_ATTEMPTS);
+            if (updated == 0) {
+                ephemeralActiveCodes.remove(challenge.getId());
+                return new PassengerOtpResult(false, "ALREADY_CONSUMED", challenge);
+            }
+
             challenge.setVerified(true);
             challenge.setVerifiedAt(LocalDateTime.now());
-            // Single-use enforcement: mark invalidated so it cannot be re-verified
             challenge.setInvalidated(true);
             challenge.setInvalidatedAt(LocalDateTime.now());
             challenge.setInvalidatedReason("CONSUMED_SINGLE_USE");
-            repository.save(challenge);
             ephemeralActiveCodes.remove(challenge.getId());
+            phoneLockRepository.deleteById(cleanPhone);
+            if (passengerPhone != null && !passengerPhone.equals(cleanPhone)) {
+                phoneLockRepository.deleteById(passengerPhone);
+            }
 
             auditService.logEvent(
                     caseId,
@@ -187,13 +199,30 @@ public class PassengerOtpService {
             log.info("[Passenger OTP] OTP successfully verified for case {} and passenger {}", caseId, cleanPhone);
             return new PassengerOtpResult(true, "VERIFIED", challenge);
         } else {
+            repository.atomicIncrementAttempts(challenge.getId());
             challenge.setAttempts(challenge.getAttempts() + 1);
-            repository.save(challenge);
+            repository.saveAndFlush(challenge);
 
             if (challenge.getAttempts() >= MAX_FAILED_ATTEMPTS) {
-                lockedPhones.put(cleanPhone, LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES));
+                com.flyo.rescue.model.PassengerPhoneLock lock = new com.flyo.rescue.model.PassengerPhoneLock(
+                        cleanPhone,
+                        challenge.getTenantId(),
+                        challenge.getAttempts(),
+                        LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES),
+                        "EXCESSIVE_FAILED_OTP_ATTEMPTS"
+                );
+                phoneLockRepository.save(lock);
+                if (passengerPhone != null && !passengerPhone.equals(cleanPhone)) {
+                    phoneLockRepository.save(new com.flyo.rescue.model.PassengerPhoneLock(
+                            passengerPhone,
+                            challenge.getTenantId(),
+                            challenge.getAttempts(),
+                            lock.getLockedUntil(),
+                            lock.getLockReason()
+                    ));
+                }
                 ephemeralActiveCodes.remove(challenge.getId());
-                log.warn("[Passenger OTP] Phone {} locked out due to {} failed OTP attempts", cleanPhone, MAX_FAILED_ATTEMPTS);
+                log.warn("[Passenger OTP] Phone {} locked out in DB due to {} failed OTP attempts", cleanPhone, MAX_FAILED_ATTEMPTS);
                 return new PassengerOtpResult(false, "LOCKED_OUT", challenge);
             }
 
@@ -241,18 +270,28 @@ public class PassengerOtpService {
      * Checks if a phone number is locked out.
      */
     public boolean isLockedOut(String phone) {
+        if (phone == null || phone.isBlank()) return false;
         String cleanPhone = cleanPhone(phone);
-        LocalDateTime until = lockedPhones.get(cleanPhone);
+        Optional<com.flyo.rescue.model.PassengerPhoneLock> lockOpt = phoneLockRepository.findById(cleanPhone);
+        if (lockOpt.isEmpty()) {
+            lockOpt = phoneLockRepository.findById(phone);
+        }
+        if (lockOpt.isEmpty()) return false;
+        com.flyo.rescue.model.PassengerPhoneLock lock = lockOpt.get();
+        LocalDateTime until = lock.getLockedUntil();
         if (until == null) return false;
         if (LocalDateTime.now().isAfter(until)) {
-            lockedPhones.remove(cleanPhone);
+            phoneLockRepository.deleteById(cleanPhone);
+            if (phone != null && !phone.equals(cleanPhone)) {
+                phoneLockRepository.deleteById(phone);
+            }
             return false;
         }
         return true;
     }
 
     public void clearLockouts() {
-        lockedPhones.clear();
+        phoneLockRepository.deleteAll();
         ephemeralActiveCodes.clear();
     }
 

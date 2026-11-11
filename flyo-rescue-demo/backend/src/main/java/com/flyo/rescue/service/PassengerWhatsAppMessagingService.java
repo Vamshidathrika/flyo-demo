@@ -32,14 +32,16 @@ public class PassengerWhatsAppMessagingService {
     private final MetaWhatsAppClient whatsAppClient;
     private final MessageService messageService;
     private final org.springframework.core.env.Environment environment;
-    private final java.util.Set<String> sentConfirmations = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final DistributedIdempotencyService distributedIdempotencyService;
 
     public PassengerWhatsAppMessagingService(MetaWhatsAppClient whatsAppClient,
                                             MessageService messageService,
-                                            org.springframework.core.env.Environment environment) {
+                                            org.springframework.core.env.Environment environment,
+                                            DistributedIdempotencyService distributedIdempotencyService) {
         this.whatsAppClient = whatsAppClient;
         this.messageService = messageService;
         this.environment = environment;
+        this.distributedIdempotencyService = distributedIdempotencyService;
     }
 
     /**
@@ -281,14 +283,15 @@ public class PassengerWhatsAppMessagingService {
                 Map.of("id", "AUDIT", "title", "View Audit Trail")
         );
 
-        // Idempotency Protection: Deduplicate rapid duplicate dispatches for same case and PNR
-        String dedupeKey = (rescueCase != null ? rescueCase.getId() : "CASE") + "_" + verifiedPnr;
-        if (!sentConfirmations.add(dedupeKey)) {
+        // Distributed Idempotency Protection: Deduplicate rapid duplicate dispatches for same case and PNR across restarts and instances
+        String dedupeKey = "CONFIRM_DISPATCH:" + (rescueCase != null ? rescueCase.getId() : "CASE") + "_" + verifiedPnr + "_" + passengerPhone;
+        if (!distributedIdempotencyService.tryAcquire(dedupeKey, "CONFIRMATION_DELIVERY", 86400)) {
             log.info("[Passenger WhatsApp] Suppressed duplicate booking confirmation delivery for dedupeKey {}", dedupeKey);
             return text;
         }
 
         whatsAppClient.sendInteractiveButtons(passengerPhone, text, buttons);
+        distributedIdempotencyService.complete(dedupeKey, "DELIVERED");
         if (rescueCase != null && rescueCase.getId() != null) {
             messageService.sendCustomMessage(rescueCase.getId(), "PASSENGER_WHATSAPP", passengerPhone, text);
         }

@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface RebookOptionRepository extends JpaRepository<RebookOption, String> {
     List<RebookOption> findByCaseIdOrderByRankAsc(String caseId);
+    void deleteByCaseId(String caseId);
 }

@@ -59,6 +59,14 @@ public class WhatsAppRealUserFlowsTest {
 
     @BeforeEach
     void setUp() {
+        caseRepository.findById("C1").ifPresent(c -> {
+            c.setState("DETECTED");
+            c.setApprovedOptionId(null);
+            c.setApprovedBy(null);
+            c.setApprovedAt(null);
+            c.setNewPnr(null);
+            caseRepository.save(c);
+        });
         commandService.authenticateSessionForTest(OPERATOR_PHONE);
         RebookResultDto mockResult = new RebookResultDto();
         mockResult.setSuccess(true);

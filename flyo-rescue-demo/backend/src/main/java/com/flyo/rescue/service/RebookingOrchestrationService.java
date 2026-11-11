@@ -35,6 +35,8 @@ public class RebookingOrchestrationService {
     private final PassengerWhatsAppMessagingService passengerWhatsAppMessagingService;
     private final AuditService auditService;
     private final CanonicalItineraryService canonicalItineraryService;
+    private final com.flyo.rescue.repository.ProviderReconciliationRepository providerReconciliationRepository;
+    private final DistributedIdempotencyService distributedIdempotencyService;
 
     public RebookingOrchestrationService(RescueCaseRepository rescueCaseRepository,
                                         RebookOptionRepository optionRepository,
@@ -44,7 +46,9 @@ public class RebookingOrchestrationService {
                                         CaseStateMachineService stateMachineService,
                                         PassengerWhatsAppMessagingService passengerWhatsAppMessagingService,
                                         AuditService auditService,
-                                        CanonicalItineraryService canonicalItineraryService) {
+                                        CanonicalItineraryService canonicalItineraryService,
+                                        com.flyo.rescue.repository.ProviderReconciliationRepository providerReconciliationRepository,
+                                        DistributedIdempotencyService distributedIdempotencyService) {
         this.rescueCaseRepository = rescueCaseRepository;
         this.optionRepository = optionRepository;
         this.bookingRepository = bookingRepository;
@@ -54,6 +58,8 @@ public class RebookingOrchestrationService {
         this.passengerWhatsAppMessagingService = passengerWhatsAppMessagingService;
         this.auditService = auditService;
         this.canonicalItineraryService = canonicalItineraryService;
+        this.providerReconciliationRepository = providerReconciliationRepository;
+        this.distributedIdempotencyService = distributedIdempotencyService;
     }
 
     /**
@@ -122,6 +128,23 @@ public class RebookingOrchestrationService {
             return rescueCase;
         }
 
+        // Distributed Idempotency Lock: prevent concurrent rebooking execution for same case & option
+        String rebookIdemKey = "EXECUTE_REBOOK:" + caseId + ":" + option.getId();
+        boolean lockAcquired = false;
+        try {
+            lockAcquired = distributedIdempotencyService.tryAcquire(rebookIdemKey, "REBOOK_EXECUTION", 1800);
+        } catch (Exception e) {
+            log.info("[Rebooking] Lock contention for case {} option {}: {}", caseId, option.getId(), e.getMessage());
+            lockAcquired = false;
+        }
+        if (!lockAcquired) {
+            log.info("[Rebooking] Concurrent or duplicate execution attempt detected for case {} option {}", caseId, option.getId());
+            if ("DONE".equalsIgnoreCase(rescueCase.getState()) && rescueCase.getNewPnr() != null) {
+                return rescueCase;
+            }
+            throw new IllegalStateException("409 Conflict: Concurrent rebooking already in progress for case " + caseId);
+        }
+
         // Revalidate option availability and fare before final booking execution
         stateMachineService.transition(
                 rescueCase,
@@ -170,6 +193,7 @@ public class RebookingOrchestrationService {
             boolean withinLimit = paymentSettlementService.verifyAgencySpendingLimit(caseId, option.getExtraCost(), "INR", agencyName);
             if (!withinLimit) {
                 log.warn("[Rebooking] Spending limit exceeded for case {} (Amount: ₹{}, Agency: {})", caseId, option.getExtraCost(), agencyName);
+                distributedIdempotencyService.release(rebookIdemKey);
                 stateMachineService.transition(
                         rescueCase,
                         CaseStateMachineService.STATE_AGENCY_APPROVAL_REQUIRED,
@@ -215,6 +239,7 @@ public class RebookingOrchestrationService {
                 rescueCaseRepository.save(rescueCase);
             } catch (Exception e) {
                 log.error("[Rebooking] Payment instrument preparation failed for case {}: {}", caseId, e.getMessage());
+                distributedIdempotencyService.release(rebookIdemKey);
                 stateMachineService.transition(
                         rescueCase,
                         CaseStateMachineService.STATE_PAYMENT_FAILED,
@@ -242,17 +267,35 @@ public class RebookingOrchestrationService {
                 "Dispatching rebooking transaction to airline provider for " + option.getFlight()
         );
 
+        // Stage 14: Assign durable provider request ID and transition to PENDING_PROVIDER_SUBMISSION
+        String providerReqId = "REQ-" + java.util.UUID.randomUUID().toString();
+        rescueCase.setProviderRequestId(providerReqId);
+        stateMachineService.transition(
+                rescueCase,
+                CaseStateMachineService.STATE_PENDING_PROVIDER_SUBMISSION,
+                "Flyo Provider Bridge",
+                "Submitting reservation request to provider with correlation ID " + providerReqId
+        );
+        rescueCaseRepository.save(rescueCase);
+
         RebookResultDto result;
-        if (vccOpt.isPresent() && option.getExtraCost() > 0) {
-            VirtualCard vcc = vccOpt.get();
-            result = rebookService.executePlaywrightRebook(
-                    caseId, option.getId(), option.getFlight(), rescueCase.getPassengerName(),
-                    vcc.getCardTokenId(), vcc.getExpiry(), "", vcc.getAmount()
-            );
-        } else {
-            result = rebookService.executePlaywrightRebook(
-                    caseId, option.getId(), option.getFlight(), rescueCase.getPassengerName()
-            );
+        try {
+            if (vccOpt.isPresent() && option.getExtraCost() > 0) {
+                VirtualCard vcc = vccOpt.get();
+                result = rebookService.executePlaywrightRebook(
+                        caseId, option.getId(), option.getFlight(), rescueCase.getPassengerName(),
+                        vcc.getCardTokenId(), vcc.getExpiry(), "", vcc.getAmount()
+                );
+            } else {
+                result = rebookService.executePlaywrightRebook(
+                        caseId, option.getId(), option.getFlight(), rescueCase.getPassengerName()
+                );
+            }
+        } catch (Exception ex) {
+            log.warn("[Rebooking] Provider invocation exception for case {}: {}", caseId, ex.getMessage());
+            result = new RebookResultDto();
+            result.setSuccess(false);
+            result.setError(ex.getMessage() != null ? ex.getMessage() : "Execution timed out on airline portal");
         }
 
         // --- THREE DISTINCT OUTCOMES ---
@@ -262,6 +305,16 @@ public class RebookingOrchestrationService {
             String newPnr = result.getNewPnr();
             rescueCase.setNewPnr(newPnr);
             rescueCase.setError(null);
+            rescueCase.setProviderReconciliationStatus("RESOLVED_CONFIRMED");
+
+            // Stage 14: Provider Confirmed transition
+            stateMachineService.transition(
+                    rescueCase,
+                    CaseStateMachineService.STATE_PROVIDER_CONFIRMED,
+                    "Flyo Provider Bridge",
+                    "Airline reservation confirmed by provider with PNR " + newPnr
+            );
+            rescueCaseRepository.save(rescueCase);
 
             // If positive fare: authorize & capture payment with issuer
             if (vccOpt.isPresent() && option.getExtraCost() > 0) {
@@ -328,6 +381,23 @@ public class RebookingOrchestrationService {
             rescueCase.setProviderOrderId("ORD-" + newPnr);
             RescueCase saved = rescueCaseRepository.save(rescueCase);
 
+            distributedIdempotencyService.complete(rebookIdemKey, "PNR:" + newPnr);
+            com.flyo.rescue.model.ProviderReconciliationRecord recon = new com.flyo.rescue.model.ProviderReconciliationRecord(
+                    java.util.UUID.randomUUID().toString(),
+                    caseId,
+                    rescueCase.getBookingId(),
+                    "MOCK_AIRLINE_PORTAL",
+                    rescueCase.getProviderOrderId(),
+                    providerReqId,
+                    rescueCase.getFlightNumber(),
+                    option.getFlight(),
+                    "RECONCILED",
+                    "Authoritative PNR " + newPnr + " confirmed."
+            );
+            recon.setReconciledPnr(newPnr);
+            recon.setReconciledAt(java.time.LocalDateTime.now());
+            providerReconciliationRepository.save(recon);
+
             auditService.logEvent(
                     caseId,
                     "REBOOK_COMPLETED",
@@ -347,6 +417,15 @@ public class RebookingOrchestrationService {
 
         if (result == null || isUnknownTimeout(errorMsg)) {
             log.warn("[Rebooking Outcome C: Unknown] Case {}: {}", caseId, errorMsg);
+            rescueCase.setProviderTimeoutCount((rescueCase.getProviderTimeoutCount() != null ? rescueCase.getProviderTimeoutCount() : 0) + 1);
+
+            stateMachineService.transition(
+                    rescueCase,
+                    CaseStateMachineService.STATE_PROVIDER_OUTCOME_UNKNOWN,
+                    "Flyo Provider Bridge",
+                    "Provider timeout on booking submission. Outcome undetermined: " + errorMsg
+            );
+            rescueCaseRepository.save(rescueCase);
 
             if (vccOpt.isPresent() && option.getExtraCost() > 0) {
                 stateMachineService.transition(
@@ -362,15 +441,55 @@ public class RebookingOrchestrationService {
                     rescueCase,
                     CaseStateMachineService.STATE_RECONCILING,
                     "Flyo Reconciliation Bridge",
-                    "Querying airline reservation host with idempotency key: " + caseId
+                    "Querying airline reservation host with providerRequestId: " + rescueCase.getProviderRequestId()
             );
             rescueCaseRepository.save(rescueCase);
 
-            // Reconcile: void card if confirmed no ticket was issued
+            // If the provider timeout cannot be definitively confirmed as uncreated, escalate to DATA_RECONCILIATION_REQUIRED
+            if (errorMsg != null && (errorMsg.contains("UNRESOLVED") || errorMsg.contains("MANUAL_RECONCILIATION"))) {
+                rescueCase.setProviderReconciliationStatus("MANUAL_RECONCILIATION_REQUIRED");
+                stateMachineService.transition(
+                        rescueCase,
+                        CaseStateMachineService.STATE_DATA_RECONCILIATION_REQUIRED,
+                        "Flyo Reconciliation Bridge",
+                        "Provider outcome unresolved after host query. Flagged for manual desk reconciliation: " + errorMsg
+                );
+                rescueCase.setError("Rebooking timed out with undetermined outcome. Escalated for authoritative human reconciliation.");
+                rescueCase.setManualNextStep("Query airline reservation desk using providerRequestId: " + rescueCase.getProviderRequestId());
+                RescueCase unresolved = rescueCaseRepository.save(rescueCase);
+                distributedIdempotencyService.complete(rebookIdemKey, "UNRESOLVED_TIMEOUT");
+
+                com.flyo.rescue.model.ProviderReconciliationRecord reconUnresolved = new com.flyo.rescue.model.ProviderReconciliationRecord(
+                        java.util.UUID.randomUUID().toString(),
+                        caseId,
+                        rescueCase.getBookingId(),
+                        "MOCK_AIRLINE_PORTAL",
+                        null,
+                        providerReqId,
+                        rescueCase.getFlightNumber(),
+                        option.getFlight(),
+                        "TIMEOUT_MANUAL_RECONCILIATION_REQUIRED",
+                        errorMsg
+                );
+                providerReconciliationRepository.save(reconUnresolved);
+
+                auditService.logEvent(caseId, "PROVIDER_OUTCOME_UNRESOLVED", "Flyo Reconciliation Bridge",
+                        "Timeout status unresolved. ProviderRequestId: " + rescueCase.getProviderRequestId());
+                return unresolved;
+            }
+
+            // Host confirms no ticket was created: void card & fail execution safely
             if (vccOpt.isPresent() && option.getExtraCost() > 0) {
                 paymentSettlementService.voidAuthorization(caseId, vccOpt.get().getId(), option.getExtraCost(), "Timeout reconciliation: No booking found on carrier host");
             }
 
+            rescueCase.setProviderReconciliationStatus("RESOLVED_NOT_CREATED");
+            stateMachineService.transition(
+                    rescueCase,
+                    CaseStateMachineService.STATE_EXECUTION_FAILED,
+                    "Flyo Booking Verifier",
+                    "Carrier host confirms no booking created: " + errorMsg
+            );
             stateMachineService.transition(
                     rescueCase,
                     CaseStateMachineService.STATE_BOOKING_FAILED,
@@ -379,6 +498,21 @@ public class RebookingOrchestrationService {
             );
             rescueCase.setError("Rebooking timed out. Host inquiry confirmed no duplicate ticket was created.");
             RescueCase failed = rescueCaseRepository.save(rescueCase);
+
+            distributedIdempotencyService.complete(rebookIdemKey, "TIMEOUT_NOT_CREATED");
+            com.flyo.rescue.model.ProviderReconciliationRecord reconResolved = new com.flyo.rescue.model.ProviderReconciliationRecord(
+                    java.util.UUID.randomUUID().toString(),
+                    caseId,
+                    rescueCase.getBookingId(),
+                    "MOCK_AIRLINE_PORTAL",
+                    null,
+                    providerReqId,
+                    rescueCase.getFlightNumber(),
+                    option.getFlight(),
+                    "RESOLVED_NOT_CREATED",
+                    errorMsg
+            );
+            providerReconciliationRepository.save(reconResolved);
 
             auditService.logEvent(caseId, "BOOKING_RECONCILED_FAILED", "Flyo Reconciliation Bridge", errorMsg);
             return failed;
@@ -394,6 +528,13 @@ public class RebookingOrchestrationService {
             );
         }
 
+        rescueCase.setProviderReconciliationStatus("RESOLVED_NOT_CREATED");
+        stateMachineService.transition(
+                rescueCase,
+                CaseStateMachineService.STATE_EXECUTION_FAILED,
+                "Flyo Booking Verifier",
+                errorMsg
+        );
         stateMachineService.transition(
                 rescueCase,
                 CaseStateMachineService.STATE_BOOKING_FAILED,
@@ -402,6 +543,21 @@ public class RebookingOrchestrationService {
         );
         rescueCase.setError(errorMsg);
         RescueCase failed = rescueCaseRepository.save(rescueCase);
+
+        distributedIdempotencyService.complete(rebookIdemKey, "DEFINITIVE_FAILURE:" + errorMsg);
+        com.flyo.rescue.model.ProviderReconciliationRecord reconFailed = new com.flyo.rescue.model.ProviderReconciliationRecord(
+                java.util.UUID.randomUUID().toString(),
+                caseId,
+                rescueCase.getBookingId(),
+                "MOCK_AIRLINE_PORTAL",
+                null,
+                providerReqId,
+                rescueCase.getFlightNumber(),
+                option.getFlight(),
+                "DEFINITIVE_REJECTION",
+                errorMsg
+        );
+        providerReconciliationRepository.save(reconFailed);
 
         auditService.logEvent(caseId, "BOOKING_FAILED", "Flyo Booking Verifier", errorMsg);
         auditService.logEvent(caseId, "BOOKING_FAILED_DEFINITIVE", "Flyo Booking Verifier", errorMsg);

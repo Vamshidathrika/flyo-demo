@@ -85,4 +85,75 @@ public class FlyoMetricsService {
                 .register(meterRegistry)
                 .increment();
     }
+
+    // =========================================================================
+    // STAGE 14: PRODUCTION RESILIENCE & INTEGRITY METRICS
+    // =========================================================================
+
+    public void recordBookingResolutionFailure(String reason) {
+        Counter.builder("flyo.booking.resolution.failures")
+                .description("Failures resolving booking or segment from alert")
+                .tag("reason", reason != null ? reason : "unknown")
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void recordItineraryMismatch(String field, String reason) {
+        Counter.builder("flyo.itinerary.mismatches")
+                .description("Discrepancies in route, flight number, or destination")
+                .tag("field", field != null ? field : "unknown")
+                .tag("reason", reason != null ? reason : "unknown")
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void recordDuplicateExecutionAttempt(String scope) {
+        Counter.builder("flyo.duplicate.execution.attempts")
+                .description("Suppressed duplicate execution or notification attempts")
+                .tag("scope", scope != null ? scope : "unknown")
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void recordOtpVerificationFailure(String reason) {
+        Counter.builder("flyo.otp.verification.failures")
+                .description("Failed passenger or operator OTP verifications")
+                .tag("reason", reason != null ? reason : "unknown")
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void recordProviderTimeout(String provider, String operation) {
+        Counter.builder("flyo.provider.timeouts")
+                .description("Provider network timeouts requiring reconciliation")
+                .tag("provider", provider != null ? provider : "unknown")
+                .tag("operation", operation != null ? operation : "unknown")
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void recordWebhookDelay(String provider, long delayMillis) {
+        Timer.builder("flyo.webhook.delays")
+                .description("Time between webhook event timestamp and arrival")
+                .tag("provider", provider != null ? provider : "unknown")
+                .register(meterRegistry)
+                .record(delayMillis, TimeUnit.MILLISECONDS);
+    }
+
+    public void recordReconciliationFailure(String caseId, String reason) {
+        Counter.builder("flyo.reconciliation.failures")
+                .description("Multi-way booking reconciliation failures")
+                .tag("reason", reason != null ? reason : "unknown")
+                .register(meterRegistry)
+                .increment();
+    }
+
+    public void recordNotificationDeliveryFailure(String channel, String reason) {
+        Counter.builder("flyo.notification.delivery.failures")
+                .description("Failures dispatching customer communications")
+                .tag("channel", channel != null ? channel : "unknown")
+                .tag("reason", reason != null ? reason : "unknown")
+                .register(meterRegistry)
+                .increment();
+    }
 }

@@ -28,23 +28,23 @@ public class WhatsAppWebhookController {
     private final com.flyo.rescue.service.WhatsAppChatLogService chatLogService;
     private final com.flyo.rescue.service.WhatsAppOtpService otpService;
     private final com.flyo.rescue.service.PassengerRescueWorkflowService passengerRescueWorkflowService;
+    private final com.flyo.rescue.service.DistributedIdempotencyService distributedIdempotencyService;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    // Idempotency: Process each Meta message ID at most once
-    private final Set<String> processedMessageIds = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public WhatsAppWebhookController(WhatsAppConfig config,
                                      MetaSignatureVerifier signatureVerifier,
                                      WhatsAppCommandService commandService,
                                      com.flyo.rescue.service.WhatsAppChatLogService chatLogService,
                                      com.flyo.rescue.service.WhatsAppOtpService otpService,
-                                     com.flyo.rescue.service.PassengerRescueWorkflowService passengerRescueWorkflowService) {
+                                     com.flyo.rescue.service.PassengerRescueWorkflowService passengerRescueWorkflowService,
+                                     com.flyo.rescue.service.DistributedIdempotencyService distributedIdempotencyService) {
         this.config = config;
         this.signatureVerifier = signatureVerifier;
         this.commandService = commandService;
         this.chatLogService = chatLogService;
         this.otpService = otpService;
         this.passengerRescueWorkflowService = passengerRescueWorkflowService;
+        this.distributedIdempotencyService = distributedIdempotencyService;
     }
 
     /**
@@ -238,12 +238,14 @@ public class WhatsAppWebhookController {
                                     String from = msg.path("from").asText();
                                     String type = msg.path("type").asText();
 
-                                    // Deduplicate by message ID
+                                    // Distributed Idempotency: Deduplicate by message ID across instances and restarts
                                     if (msgId != null && !msgId.isBlank()) {
-                                        if (!processedMessageIds.add(msgId)) {
-                                            log.info("[Meta Webhook] Duplicate message ID skipped: {}", msgId);
+                                        String idemKey = "META_MSG_ID:" + msgId;
+                                        if (!distributedIdempotencyService.tryAcquire(idemKey, "META_WEBHOOK_INGRESS", 86400)) {
+                                            log.info("[Meta Webhook] Duplicate message ID skipped via distributed store: {}", msgId);
                                             continue;
                                         }
+                                        distributedIdempotencyService.complete(idemKey, "PROCESSED");
                                     }
 
                                     String textBody = null;

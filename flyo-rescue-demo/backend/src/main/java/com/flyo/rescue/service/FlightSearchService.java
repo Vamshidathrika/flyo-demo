@@ -117,6 +117,10 @@ public class FlightSearchService {
                     "Rank 3 (Disqualified): Only 85 minutes buffer to onward flight. High risk of missed international connection."
             );
             attachCanonicalMetadata(opt1, booking.getId(), caseId, segmentId, itinVersion, "HYD", "DEL", "YYZ");
+            opt1.setRecoveryStrategy("REPLACE_DISRUPTED_SEGMENT_PRESERVE_ONWARD");
+            opt1.setPreservesOnwardConnection(false);
+            opt1.setReroutesEntireJourney(false);
+            opt1.setBaggageThroughChecked(false);
 
             RebookOption opt2 = new RebookOption(
                     o2Id, caseId, "FL301", "HYD → BOM → DEL (via Mumbai)",
@@ -124,6 +128,10 @@ public class FlightSearchService {
                     "Rank 1: Arrives Delhi Tomorrow 01:40 (7h 50m buffer). Safely preserves onward international connection to Toronto (YYZ 09:30)."
             );
             attachCanonicalMetadata(opt2, booking.getId(), caseId, segmentId, itinVersion, "HYD", "DEL", "YYZ");
+            opt2.setRecoveryStrategy("REPLACE_DISRUPTED_SEGMENT_PRESERVE_ONWARD");
+            opt2.setPreservesOnwardConnection(true);
+            opt2.setReroutesEntireJourney(false);
+            opt2.setBaggageThroughChecked(true);
 
             RebookOption opt3 = new RebookOption(
                     o3Id, caseId, "FL401", "HYD → DEL (Direct)",
@@ -131,6 +139,10 @@ public class FlightSearchService {
                     "Rank 2: Departs Tomorrow 10:00. Misses Toronto flight; requires schedule realignment."
             );
             attachCanonicalMetadata(opt3, booking.getId(), caseId, segmentId, itinVersion, "HYD", "DEL", "YYZ");
+            opt3.setRecoveryStrategy("REBOOK_AFFECTED_REMAINING");
+            opt3.setPreservesOnwardConnection(false);
+            opt3.setReroutesEntireJourney(false);
+            opt3.setBaggageThroughChecked(false);
 
             return List.of(opt1, opt2, opt3);
         }
@@ -150,12 +162,17 @@ public class FlightSearchService {
                 String.format("%s → %s early flight with %d min transit window.", origin, destination, buffer1)
         );
         attachCanonicalMetadata(opt1, booking.getId(), caseId, segmentId, itinVersion, origin, destination, finalDest);
+        opt1.setRecoveryStrategy("REPLACE_DISRUPTED_SEGMENT_PRESERVE_ONWARD");
+        opt1.setPreservesOnwardConnection(hasOnward && buffer1 >= 120);
+        opt1.setReroutesEntireJourney(false);
+        opt1.setBaggageThroughChecked(hasOnward);
         dynamicOptions.add(opt1);
 
         // Option 2: Express transfer option
         // If multi-segment to a different final destination (e.g. BLR -> HYD -> DEL): offer express connection to final destination
         // If standalone (e.g. BLR -> HYD): intermediate hub must still arrive at destination! E.g. BLR -> BOM -> HYD
-        String targetDestOpt2 = booking.isMultiSegment() && !destination.equalsIgnoreCase(finalDest) ? finalDest : destination;
+        boolean isMultiToFinal = booking.isMultiSegment() && !destination.equalsIgnoreCase(finalDest);
+        String targetDestOpt2 = isMultiToFinal ? finalDest : destination;
         String hubAirport = "BOM".equalsIgnoreCase(origin) || "BOM".equalsIgnoreCase(targetDestOpt2) ? "DEL" : "BOM";
         int arr2Minutes = 1 * 60 + 40;
         int buffer2 = hasOnward ? (onwardDepartureMinutes - arr2Minutes) : 470;
@@ -166,6 +183,17 @@ public class FlightSearchService {
                 String.format("Optimal safe transfer preserving onward travel with %dh%02dm buffer.", buffer2 / 60, Math.abs(buffer2 % 60))
         );
         attachCanonicalMetadata(opt2, booking.getId(), caseId, segmentId, itinVersion, origin, targetDestOpt2, finalDest);
+        if (isMultiToFinal) {
+            opt2.setRecoveryStrategy("REROUTE_ENTIRE_JOURNEY");
+            opt2.setPreservesOnwardConnection(false);
+            opt2.setReroutesEntireJourney(true);
+            opt2.setBaggageThroughChecked(true);
+        } else {
+            opt2.setRecoveryStrategy("REPLACE_DISRUPTED_SEGMENT_PRESERVE_ONWARD");
+            opt2.setPreservesOnwardConnection(hasOnward && buffer2 >= 120);
+            opt2.setReroutesEntireJourney(false);
+            opt2.setBaggageThroughChecked(true);
+        }
         dynamicOptions.add(opt2);
 
         // Option 3: Daytime direct flight
@@ -177,6 +205,10 @@ public class FlightSearchService {
                 String.format("%s → %s daytime departure.", origin, destination)
         );
         attachCanonicalMetadata(opt3, booking.getId(), caseId, segmentId, itinVersion, origin, destination, finalDest);
+        opt3.setRecoveryStrategy("REBOOK_AFFECTED_REMAINING");
+        opt3.setPreservesOnwardConnection(false);
+        opt3.setReroutesEntireJourney(false);
+        opt3.setBaggageThroughChecked(false);
         dynamicOptions.add(opt3);
 
         return dynamicOptions;

@@ -34,22 +34,22 @@ public class CancellationNotificationService {
     private final CaseStateMachineService stateMachineService;
     private final PassengerWhatsAppMessagingService passengerWhatsAppMessagingService;
     private final AuditService auditService;
-
-    // Idempotency cache: prevents duplicate notifications for the same booking cancellation
-    private final Set<String> notifiedBookings = ConcurrentHashMap.newKeySet();
+    private final DistributedIdempotencyService distributedIdempotencyService;
 
     public CancellationNotificationService(BookingRepository bookingRepository,
                                          RescueCaseRepository rescueCaseRepository,
                                          CaseService caseService,
                                          CaseStateMachineService stateMachineService,
                                          PassengerWhatsAppMessagingService passengerWhatsAppMessagingService,
-                                         AuditService auditService) {
+                                         AuditService auditService,
+                                         DistributedIdempotencyService distributedIdempotencyService) {
         this.bookingRepository = bookingRepository;
         this.rescueCaseRepository = rescueCaseRepository;
         this.caseService = caseService;
         this.stateMachineService = stateMachineService;
         this.passengerWhatsAppMessagingService = passengerWhatsAppMessagingService;
         this.auditService = auditService;
+        this.distributedIdempotencyService = distributedIdempotencyService;
     }
 
     /**
@@ -72,9 +72,10 @@ public class CancellationNotificationService {
             return rescueCase;
         }
 
-        // Deduplication: prevent duplicate WhatsApp notifications for same cancellation event
-        String dedupKey = bookingId + ":" + booking.getFlight() + ":CANCELLED";
-        if (notifiedBookings.add(dedupKey) || "DETECTED".equals(rescueCase.getState())) {
+        // Distributed Idempotency: prevent duplicate WhatsApp notifications across restarts and multiple workers
+        String dedupKey = "CANCELLATION:" + bookingId + ":" + booking.getFlight() + ":CANCELLED";
+        boolean acquired = distributedIdempotencyService.tryAcquire(dedupKey, "CANCELLATION_NOTIFICATION", 86400);
+        if (acquired || "DETECTED".equals(rescueCase.getState())) {
             // Step 1 & 2: Transition state to PASSENGER_NOTIFIED -> AWAITING_PASSENGER_DECISION
             stateMachineService.transition(
                     rescueCase,
@@ -102,6 +103,7 @@ public class CancellationNotificationService {
 
             // Send interactive WhatsApp message
             passengerWhatsAppMessagingService.sendCancellationNotification(paxPhone, booking, rescueCase);
+            distributedIdempotencyService.complete(dedupKey, "DISPATCHED");
             log.info("[Cancellation Ingress] Notified passenger {} for case {}", paxPhone, rescueCase.getId());
         } else {
             log.info("[Cancellation Ingress] Suppressed duplicate notification for booking {}", bookingId);
@@ -111,6 +113,6 @@ public class CancellationNotificationService {
     }
 
     public void clearDeduplicationCache() {
-        notifiedBookings.clear();
+        // No-op for persistent store or purge if required in tests
     }
 }

@@ -82,6 +82,15 @@ public class WhatsAppPassengerRescueWorkflowTest {
     @Autowired
     private com.flyo.rescue.repository.VirtualCardRepository virtualCardRepository;
 
+    @Autowired
+    private com.flyo.rescue.repository.DistributedIdempotencyRepository distributedIdempotencyRepository;
+
+    @Autowired
+    private com.flyo.rescue.repository.BusinessIdempotencyKeyRepository businessIdempotencyKeyRepository;
+
+    @Autowired
+    private com.flyo.rescue.repository.WebhookDeduplicationRepository webhookDeduplicationRepository;
+
     @MockBean
     private RebookService rebookService;
 
@@ -151,9 +160,12 @@ public class WhatsAppPassengerRescueWorkflowTest {
             rescueCaseRepository.save(c);
         });
 
-        // Clear challenges, cards and lockouts for clean run
+        // Clear challenges, cards, locks and lockouts for clean run
         challengeRepository.deleteAll();
         virtualCardRepository.deleteAll();
+        distributedIdempotencyRepository.deleteAll();
+        businessIdempotencyKeyRepository.deleteAll();
+        webhookDeduplicationRepository.deleteAll();
         passengerOtpService.clearLockouts();
     }
 

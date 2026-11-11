@@ -228,4 +228,14 @@ public class BookingService {
         }
         return bookingRepository.saveAll(seedBookings);
     }
+
+    @Transactional
+    public List<Booking> seedBookings() {
+        return resetSeedBookings();
+    }
+
+    @Transactional
+    public List<Booking> seedBookings(String tenantId) {
+        return resetSeedBookings();
+    }
 }

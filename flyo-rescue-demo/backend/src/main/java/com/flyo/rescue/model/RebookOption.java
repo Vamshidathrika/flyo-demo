@@ -48,6 +48,10 @@ public class RebookOption {
     private String destinationAirport;
     private String finalDestination;
     private String deterministicCacheKey;
+    private String recoveryStrategy = "REPLACE_DISRUPTED_SEGMENT_PRESERVE_ONWARD";
+    private boolean preservesOnwardConnection = true;
+    private boolean reroutesEntireJourney = false;
+    private boolean baggageThroughChecked = false;
 
     public RebookOption() {
     }
@@ -377,5 +381,37 @@ public class RebookOption {
 
     public void setDeterministicCacheKey(String deterministicCacheKey) {
         this.deterministicCacheKey = deterministicCacheKey;
+    }
+
+    public String getRecoveryStrategy() {
+        return recoveryStrategy != null ? recoveryStrategy : "REPLACE_DISRUPTED_SEGMENT_PRESERVE_ONWARD";
+    }
+
+    public void setRecoveryStrategy(String recoveryStrategy) {
+        this.recoveryStrategy = recoveryStrategy;
+    }
+
+    public boolean isPreservesOnwardConnection() {
+        return preservesOnwardConnection;
+    }
+
+    public void setPreservesOnwardConnection(boolean preservesOnwardConnection) {
+        this.preservesOnwardConnection = preservesOnwardConnection;
+    }
+
+    public boolean isReroutesEntireJourney() {
+        return reroutesEntireJourney;
+    }
+
+    public void setReroutesEntireJourney(boolean reroutesEntireJourney) {
+        this.reroutesEntireJourney = reroutesEntireJourney;
+    }
+
+    public boolean isBaggageThroughChecked() {
+        return baggageThroughChecked;
+    }
+
+    public void setBaggageThroughChecked(boolean baggageThroughChecked) {
+        this.baggageThroughChecked = baggageThroughChecked;
     }
 }

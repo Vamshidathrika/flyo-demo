@@ -48,6 +48,13 @@ public class CaseStateMachineService {
     public static final String STATE_DATA_RECONCILIATION_REQUIRED = "DATA_RECONCILIATION_REQUIRED";
     public static final String STATE_MANUAL_INTERVENTION_REQUIRED = "MANUAL_INTERVENTION_REQUIRED";
 
+    // Stage 14 Distributed Transaction Safety & Provider States
+    public static final String STATE_PENDING_PROVIDER_SUBMISSION = "PENDING_PROVIDER_SUBMISSION";
+    public static final String STATE_PROVIDER_OUTCOME_UNKNOWN = "PROVIDER_OUTCOME_UNKNOWN";
+    public static final String STATE_PROVIDER_CONFIRMED = "PROVIDER_CONFIRMED";
+    public static final String STATE_EXECUTION_FAILED = "EXECUTION_FAILED";
+    public static final String STATE_EXECUTION_CANCELLED = "EXECUTION_CANCELLED";
+
     // Backward-Compatible & Granular Sub-States (Mapped cleanly to authoritative states)
     public static final String STATE_PASSENGER_NOTIFIED = "PASSENGER_NOTIFIED";
     public static final String STATE_AWAITING_PASSENGER_DECISION = "AWAITING_PASSENGER_DECISION";
@@ -135,7 +142,7 @@ public class CaseStateMachineService {
         map.put(STATE_OPTIONS_READY, Set.of(
                 STATE_OPTIONS_READY, STATE_FETCHING_ITINERARY, STATE_SEARCHING_ALTERNATIVES,
                 STATE_AWAITING_APPROVAL, STATE_APPROVED, STATE_ESCALATED,
-                STATE_AWAITING_OPTION_SELECTION, STATE_OPTION_SELECTED,
+                STATE_AWAITING_OPTION_SELECTION, STATE_OPTION_SELECTED, STATE_REVALIDATING_OPTION,
                 STATE_OPTION_EXPIRED, STATE_NO_OPTIONS_AVAILABLE,
                 STATE_PASSENGER_DECLINED, STATE_MANUAL_INTERVENTION_REQUIRED,
                 STATE_DATA_RECONCILIATION_REQUIRED
@@ -278,7 +285,7 @@ public class CaseStateMachineService {
         map.put(STATE_RECONCILING, Set.of(
                 STATE_VERIFYING_BOOKING, STATE_VERIFYING_TICKET, STATE_DONE, STATE_BOOKING_FAILED,
                 STATE_PAYMENT_VOIDED, STATE_PAYMENT_REFUNDED, STATE_PAYMENT_OUTCOME_UNKNOWN,
-                STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED
+                STATE_ESCALATED, STATE_MANUAL_INTERVENTION_REQUIRED, STATE_DATA_RECONCILIATION_REQUIRED
         ));
 
         // AWAITING APPROVAL (Unapproved queue - awaiting explicit human supervisor authorization)
@@ -297,9 +304,42 @@ public class CaseStateMachineService {
         // REBOOKING
         map.put(STATE_REBOOKING, Set.of(
                 STATE_PAYMENT_AUTH_PENDING, STATE_PAYMENT_AUTHORIZED, STATE_PAYMENT_CAPTURED, STATE_PAYMENT_VERIFIED,
+                STATE_PENDING_PROVIDER_SUBMISSION, STATE_PROVIDER_CONFIRMED, STATE_PROVIDER_OUTCOME_UNKNOWN,
                 STATE_VERIFYING_BOOKING, STATE_VERIFYING_TICKET, STATE_RECONCILING, STATE_DONE, STATE_BOOKING_FAILED,
+                STATE_EXECUTION_FAILED, STATE_EXECUTION_CANCELLED,
                 STATE_FAILED_ESCALATED, STATE_PAYMENT_RECONCILIATION_REQUIRED, STATE_PAYMENT_OUTCOME_UNKNOWN,
                 STATE_MANUAL_INTERVENTION_REQUIRED, STATE_DATA_RECONCILIATION_REQUIRED
+        ));
+
+        // STAGE 14: PENDING PROVIDER SUBMISSION
+        map.put(STATE_PENDING_PROVIDER_SUBMISSION, Set.of(
+                STATE_PROVIDER_CONFIRMED, STATE_PROVIDER_OUTCOME_UNKNOWN, STATE_EXECUTION_FAILED,
+                STATE_VERIFYING_BOOKING, STATE_BOOKING_CONFIRMED, STATE_DONE, STATE_BOOKING_FAILED,
+                STATE_FAILED_ESCALATED, STATE_ESCALATED
+        ));
+
+        // STAGE 14: PROVIDER OUTCOME UNKNOWN
+        map.put(STATE_PROVIDER_OUTCOME_UNKNOWN, Set.of(
+                STATE_PROVIDER_CONFIRMED, STATE_DATA_RECONCILIATION_REQUIRED, STATE_FAILED_ESCALATED,
+                STATE_ESCALATED, STATE_EXECUTION_FAILED, STATE_RECONCILING, STATE_BOOKING_FAILED,
+                STATE_MANUAL_INTERVENTION_REQUIRED
+        ));
+
+        // STAGE 14: PROVIDER CONFIRMED
+        map.put(STATE_PROVIDER_CONFIRMED, Set.of(
+                STATE_PAYMENT_AUTH_PENDING, STATE_PAYMENT_AUTHORIZED, STATE_PAYMENT_CAPTURED,
+                STATE_VERIFYING_BOOKING, STATE_VERIFYING_TICKET, STATE_TICKET_ISSUED,
+                STATE_RESCUE_COMPLETED, STATE_DONE
+        ));
+
+        // STAGE 14: EXECUTION FAILED
+        map.put(STATE_EXECUTION_FAILED, Set.of(
+                STATE_FAILED_ESCALATED, STATE_ESCALATED, STATE_OPTIONS_READY, STATE_MANUAL_INTERVENTION_REQUIRED
+        ));
+
+        // STAGE 14: EXECUTION CANCELLED
+        map.put(STATE_EXECUTION_CANCELLED, Set.of(
+                STATE_OPTIONS_READY, STATE_ESCALATED
         ));
 
         // DATA RECONCILIATION REQUIRED (Fail-closed P0 state)
@@ -429,7 +469,7 @@ public class CaseStateMachineService {
         ));
 
         // TERMINAL STATES
-        map.put(STATE_DONE, Collections.emptySet());
+        map.put(STATE_DONE, Set.of(STATE_DATA_RECONCILIATION_REQUIRED, STATE_RECONCILIATION_REQUIRED));
         map.put(STATE_RESCUE_COMPLETED, Collections.emptySet());
         map.put(STATE_ESCALATED, Set.of(STATE_DETECTED, STATE_OPTIONS_READY)); // Agency desk can reopen
         map.put(STATE_FAILED_ESCALATED, Collections.emptySet());
@@ -456,13 +496,17 @@ public class CaseStateMachineService {
                 || s.equals(STATE_PASSENGER_DECLINED)
                 || s.equals(STATE_RESCUE_COMPLETED)
                 || s.equals(STATE_DONE)
-                || s.equals(STATE_FAILED_ESCALATED);
+                || s.equals(STATE_FAILED_ESCALATED)
+                || s.equals(STATE_EXECUTION_CANCELLED);
     }
 
     public boolean canTransition(String fromState, String toState) {
         if (fromState == null || toState == null) return false;
         if (fromState.equals(toState)) return true; // Idempotent check
-        if (isTerminal(fromState)) return false; // Absolutely no transitions out of terminal states
+        if (STATE_DATA_RECONCILIATION_REQUIRED.equals(toState)) return true; // Data discrepancy audit always supersedes and halts
+        if (isTerminal(fromState)) {
+            return false; // Absolutely no transitions out of terminal states
+        }
         Set<String> allowed = ALLOWED_TRANSITIONS.get(fromState);
         if (allowed != null && allowed.contains(toState)) return true;
 
@@ -487,8 +531,11 @@ public class CaseStateMachineService {
         if (STATE_DONE.equals(state)) return STATE_RESCUE_COMPLETED;
         if (STATE_PASSENGER_DECLINED.equals(state)) return STATE_ABANDONED;
         if (STATE_OPTION_EXPIRED.equals(state) || STATE_OTP_EXPIRED.equals(state)) return STATE_EXPIRED;
-        if (STATE_BOOKING_FAILED.equals(state) || STATE_FAILED_ESCALATED.equals(state)) return STATE_FAILED;
-        if (STATE_RECONCILING.equals(state) || STATE_PAYMENT_RECONCILIATION_REQUIRED.equals(state)) return STATE_RECONCILIATION_REQUIRED;
+        if (STATE_BOOKING_FAILED.equals(state) || STATE_FAILED_ESCALATED.equals(state) || STATE_EXECUTION_FAILED.equals(state)) return STATE_FAILED;
+        if (STATE_RECONCILING.equals(state) || STATE_PAYMENT_RECONCILIATION_REQUIRED.equals(state) || STATE_PROVIDER_OUTCOME_UNKNOWN.equals(state)) return STATE_RECONCILIATION_REQUIRED;
+        if (STATE_PENDING_PROVIDER_SUBMISSION.equals(state)) return STATE_BOOKING_IN_PROGRESS;
+        if (STATE_PROVIDER_CONFIRMED.equals(state)) return STATE_BOOKING_CONFIRMED;
+        if (STATE_EXECUTION_CANCELLED.equals(state)) return STATE_ABANDONED;
         return state;
     }
 

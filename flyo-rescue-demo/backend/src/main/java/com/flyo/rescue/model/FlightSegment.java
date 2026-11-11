@@ -3,10 +3,13 @@ package com.flyo.rescue.model;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "flight_segments")
+@Table(name = "flight_segments", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_booking_segment", columnNames = {"bookingId", "segmentIndex"})
+})
 public class FlightSegment {
 
     @Id
@@ -48,6 +51,14 @@ public class FlightSegment {
         this.status = "CONFIRMED";
         this.itineraryVersion = 1L;
         this.createdAt = LocalDateTime.now();
+    }
+
+    public FlightSegment(String id, String bookingId, int segmentIndex, String flightNumber,
+                         String originAirport, String destinationAirport,
+                         String scheduledDeparture, String scheduledArrival, long itineraryVersion) {
+        this(id, bookingId, "PAX-" + bookingId, "PNR-" + bookingId, "ITIN-" + bookingId,
+             segmentIndex, flightNumber, originAirport, destinationAirport, scheduledDeparture, scheduledArrival);
+        this.itineraryVersion = itineraryVersion;
     }
 
     public String getId() {

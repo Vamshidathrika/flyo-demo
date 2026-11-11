@@ -74,6 +74,20 @@ public class PaymentSettlementTest {
             bookingRepository.save(b);
         });
 
+        // Reset C1 if present
+        rescueCaseRepository.findById("C1").ifPresent(c -> {
+            c.setState("DETECTED");
+            c.setApprovedOptionId(null);
+            c.setApprovedBy(null);
+            c.setApprovedAt(null);
+            c.setNewPnr(null);
+            c.setError(null);
+            c.setManualNextStep(null);
+            rescueCaseRepository.save(c);
+        });
+        cardRepository.deleteAll();
+        transactionRepository.deleteAll();
+
         // Mock Playwright worker rebook response
         RebookResultDto successResult = new RebookResultDto();
         successResult.setSuccess(true);

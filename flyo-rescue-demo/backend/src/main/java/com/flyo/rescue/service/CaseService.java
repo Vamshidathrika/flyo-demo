@@ -104,7 +104,7 @@ public class CaseService {
         Optional<RescueCase> existingOpt = caseRepository.findFirstByBookingIdOrderByCreatedAtDesc(bookingId);
         if (existingOpt.isPresent()) {
             RescueCase existing = existingOpt.get();
-            // If already resolved (DONE) or in active lifecycle, preserve existing case state
+            // If already resolved (DONE) or in active non-escalated lifecycle, preserve existing case state
             if ("DONE".equals(existing.getState()) || (!"ESCALATED".equals(existing.getState()) && !"FAILED_ESCALATED".equals(existing.getState()))) {
                 return existing;
             }
@@ -428,8 +428,16 @@ public class CaseService {
             throw new IllegalStateTransitionException("409 Conflict: Itinerary revalidation failed: " + validation.mismatchReason());
         }
 
-        RebookOption option = optionRepository.findByCaseIdOrderByRankAsc(caseId).stream()
-                .filter(o -> o.getId().equals(optionId) || o.getId().equals(caseId + "-" + optionId) || o.getId().endsWith("-" + optionId))
+        List<RebookOption> existingOptions = optionRepository.findByCaseIdOrderByRankAsc(caseId);
+        if (existingOptions.isEmpty()) {
+            existingOptions = generateAndRankOptions(caseId);
+        }
+
+        RebookOption option = existingOptions.stream()
+                .filter(o -> o.getId().equals(optionId)
+                        || o.getId().equals(caseId + "-" + optionId)
+                        || o.getId().endsWith("-" + optionId)
+                        || (optionId.startsWith("O") && o.getId().endsWith(optionId)))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Invalid optionId: " + optionId + " does not belong to case " + caseId));
 

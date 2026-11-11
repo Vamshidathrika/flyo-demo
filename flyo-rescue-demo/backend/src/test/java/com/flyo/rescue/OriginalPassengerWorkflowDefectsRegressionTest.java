@@ -95,6 +95,9 @@ public class OriginalPassengerWorkflowDefectsRegressionTest {
     @MockBean
     private RebookService rebookService;
 
+    @Autowired
+    private com.flyo.rescue.config.FlyoDataSeeder dataSeeder;
+
     @BeforeEach
     void setup() {
         cleanUp();
@@ -108,10 +111,21 @@ public class OriginalPassengerWorkflowDefectsRegressionTest {
     }
 
     private void cleanUp() {
-        messageRepository.deleteAll();
-        optionRepository.deleteAll();
-        rescueCaseRepository.deleteAll();
-        bookingRepository.deleteAll();
+        // Delete only defect-test specific cases, options, messages and bookings to preserve seed data
+        optionRepository.findAll().stream()
+                .filter(o -> o.getCaseId() != null && o.getCaseId().startsWith("CASE-DEFECT"))
+                .forEach(optionRepository::delete);
+        rescueCaseRepository.findAll().stream()
+                .filter(c -> c.getId() != null && c.getId().startsWith("CASE-DEFECT"))
+                .forEach(rescueCaseRepository::delete);
+        bookingRepository.findAll().stream()
+                .filter(b -> b.getId() != null && b.getId().startsWith("B-DEFECT"))
+                .forEach(bookingRepository::delete);
+
+        // Ensure seed bookings are present for downstream tests
+        if (bookingRepository.findById("B1").isEmpty()) {
+            dataSeeder.run();
+        }
     }
 
     @Test

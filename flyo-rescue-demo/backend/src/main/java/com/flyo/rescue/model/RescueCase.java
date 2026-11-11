@@ -84,6 +84,13 @@ public class RescueCase {
     private String mismatchReason;
 
     private Integer onwardSegmentsCount = 0;
+
+    private String providerRequestId;
+    private Integer providerTimeoutCount = 0;
+    private String providerReconciliationStatus = "NONE";
+    private String recoveryStrategy = "REPLACE_DISRUPTED_SEGMENT_PRESERVE_ONWARD";
+    private LocalDateTime lastReconciledAt;
+    private String reconciledBy;
     
     private LocalDateTime createdAt;
     
@@ -521,5 +528,53 @@ public class RescueCase {
 
     public void setOnwardSegmentsCount(Integer onwardSegmentsCount) {
         this.onwardSegmentsCount = onwardSegmentsCount;
+    }
+
+    public String getProviderRequestId() {
+        return providerRequestId;
+    }
+
+    public void setProviderRequestId(String providerRequestId) {
+        this.providerRequestId = providerRequestId;
+    }
+
+    public Integer getProviderTimeoutCount() {
+        return providerTimeoutCount != null ? providerTimeoutCount : 0;
+    }
+
+    public void setProviderTimeoutCount(Integer providerTimeoutCount) {
+        this.providerTimeoutCount = providerTimeoutCount;
+    }
+
+    public String getProviderReconciliationStatus() {
+        return providerReconciliationStatus != null ? providerReconciliationStatus : "NONE";
+    }
+
+    public void setProviderReconciliationStatus(String providerReconciliationStatus) {
+        this.providerReconciliationStatus = providerReconciliationStatus;
+    }
+
+    public String getRecoveryStrategy() {
+        return recoveryStrategy != null ? recoveryStrategy : "REPLACE_DISRUPTED_SEGMENT_PRESERVE_ONWARD";
+    }
+
+    public void setRecoveryStrategy(String recoveryStrategy) {
+        this.recoveryStrategy = recoveryStrategy;
+    }
+
+    public LocalDateTime getLastReconciledAt() {
+        return lastReconciledAt;
+    }
+
+    public void setLastReconciledAt(LocalDateTime lastReconciledAt) {
+        this.lastReconciledAt = lastReconciledAt;
+    }
+
+    public String getReconciledBy() {
+        return reconciledBy;
+    }
+
+    public void setReconciledBy(String reconciledBy) {
+        this.reconciledBy = reconciledBy;
     }
 }

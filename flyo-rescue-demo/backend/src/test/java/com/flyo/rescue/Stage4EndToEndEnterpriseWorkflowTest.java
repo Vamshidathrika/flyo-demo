@@ -108,6 +108,9 @@ public class Stage4EndToEndEnterpriseWorkflowTest {
     @MockBean
     private TicketVerificationProvider ticketVerificationProvider;
 
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     private String tokenTenantAlpha;
     private String tokenTenantAlphaAdmin;
     private String tokenTenantBeta;
@@ -142,6 +145,22 @@ public class Stage4EndToEndEnterpriseWorkflowTest {
     @AfterEach
     void tearDown() {
         TenantContext.clear();
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).execute(status -> {
+            List<String> testBookingIds = List.of(
+                    "B-CONF", "B-BETA", "B-MISMATCH", "B-EXP", "B-RACE", "B-IDEM",
+                    "B-TIMEOUT", "B-RECON", "B-TKT-FAIL", "B-MSG-FAIL", "B-CRM", "B-PAY-FAIL"
+            );
+            for (String bid : testBookingIds) {
+                caseRepository.findAll().stream()
+                        .filter(c -> bid.equals(c.getBookingId()) || (c.getId() != null && c.getId().contains(bid)))
+                        .forEach(c -> {
+                            optionRepository.deleteAll(optionRepository.findByCaseIdOrderByRankAsc(c.getId()));
+                            caseRepository.delete(c);
+                        });
+                bookingRepository.deleteById(bid);
+            }
+            return null;
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -302,7 +321,7 @@ public class Stage4EndToEndEnterpriseWorkflowTest {
     void testConcurrentConflictingApprovals() throws Exception {
         saveBooking("B-RACE", "Race Pax", "tenant_default");
         String caseId = "CASE-RACE-" + UUID.randomUUID().toString().substring(0, 6);
-        RescueCase c = new RescueCase(caseId, "B-RACE", "Race Pax", "AWAITING_APPROVAL", "HYD-DEL", "AI-RACE-" + UUID.randomUUID().toString().substring(0, 4), "None", "None", "None");
+        RescueCase c = new RescueCase(caseId, "B-RACE", "Race Pax", "AWAITING_APPROVAL", "HYD-DEL", "AI-839", "None", "None", "None");
         caseRepository.save(c);
 
         RebookOption opt1 = new RebookOption("OPT-A", caseId, "AI-840", "HYD-DEL", "Tonight", "Tomorrow", 120, 0, true, "A", 1);

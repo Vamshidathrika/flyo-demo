@@ -1,0 +1,565 @@
+{
+  "scanned_files": 324,
+  "prod_files": 260,
+  "test_files": 64,
+  "findings": [
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/BookingApiTest.java",
+      "line": 59,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": ".andExpect(jsonPath(\"$[0].passengerName\", is(\"Ananya Sharma\")))"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/ConcurrencyAndLoadTest.java",
+      "line": 73,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "successResult.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppPassengerRescueWorkflowTest.java",
+      "line": 114,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "o2Result.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppPassengerRescueWorkflowTest.java",
+      "line": 139,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "new Booking(\"B1\", \"PNR-101\", \"Ananya Sharma\", \"AI-839\", \"HYD \u2192 DEL\","
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppPassengerRescueWorkflowTest.java",
+      "line": 258,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertTrue(verifyReply.contains(\"R7X2K9\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppPassengerRescueWorkflowTest.java",
+      "line": 264,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertEquals(\"R7X2K9\", completed.getNewPnr());"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/AuditAndMessageTest.java",
+      "line": 63,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "mockResult.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/AuditAndMessageTest.java",
+      "line": 94,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(jsonPath(\"$.newPnr\", is(\"R7X2K9\")));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/AuditAndMessageTest.java",
+      "line": 100,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(jsonPath(\"$[?(@.type == 'SENT_SIMULATED')].text\", hasItem(containsString(\"R7X2K9\"))))"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/AuditAndMessageTest.java",
+      "line": 102,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(jsonPath(\"$[?(@.type == 'PASSENGER_STAGE_2_TICKET')].text\", hasItem(containsString(\"R7X2K"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/AuditAndMessageTest.java",
+      "line": 112,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(jsonPath(\"$[?(@.event == 'REBOOK_COMPLETED')].detail\", hasItem(containsString(\"R7X2K9\")))"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/AuditAndMessageTest.java",
+      "line": 113,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(jsonPath(\"$[?(@.event == 'MESSAGE_SENT')].detail\", hasItem(containsString(\"R7X2K9\"))));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/ProviderAdaptersIntegrationTest.java",
+      "line": 53,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "VirtualCard card = sandboxPaymentAdapter.issueVirtualCard(\"CASE-ADAPTER-1\", \"O2\", 4200, \"Ananya Shar"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/ProviderAdaptersIntegrationTest.java",
+      "line": 91,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "amadeusBookingAdapter.executeRebook(\"C1\", \"O2\", \"FL301\", \"Ananya Sharma\", null, null, null, 0);"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/ProviderAdaptersIntegrationTest.java",
+      "line": 98,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "sabreBookingAdapter.executeRebook(\"C1\", \"O2\", \"FL301\", \"Ananya Sharma\", null, null, null, 0);"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/IdempotencyTest.java",
+      "line": 69,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "mockResult.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/IdempotencyTest.java",
+      "line": 89,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(jsonPath(\"$.newPnr\", is(\"R7X2K9\")));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/IdempotencyTest.java",
+      "line": 99,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(jsonPath(\"$.newPnr\", is(\"R7X2K9\")));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppCommandBotTest.java",
+      "line": 46,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "successResult.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppCommandBotTest.java",
+      "line": 112,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "assertTrue(reply.contains(\"Ananya Sharma\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppCommandBotTest.java",
+      "line": 121,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "assertTrue(reply.contains(\"Ananya Sharma\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppCommandBotTest.java",
+      "line": 156,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertTrue(reply.contains(\"R7X2K9\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppCommandBotTest.java",
+      "line": 161,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertEquals(\"R7X2K9\", c.getNewPnr());"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppCommandBotTest.java",
+      "line": 195,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "assertTrue(reply.contains(\"Ananya Sharma\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppCommandBotTest.java",
+      "line": 196,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertTrue(reply.contains(\"R7X2K9\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppCommandBotTest.java",
+      "line": 200,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertEquals(\"R7X2K9\", c.getNewPnr());"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/MockAirlinePortalTest.java",
+      "line": 42,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(content().string(containsString(\"R7X2K9\")));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/P0ItineraryIntegrityRegressionTest.java",
+      "line": 211,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "b.setPassengerName(\"Ananya Sharma\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage14DistributedTransactionSafetyTest.java",
+      "line": 159,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "createBooking(\"B-TENANT-ISO\", \"Ananya Sharma\", \"PNR-TENANT\", \"BLR \u2192 HYD\", \"6E-203\", OTHER_TENANT);"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage14DistributedTransactionSafetyTest.java",
+      "line": 160,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "createCase(caseId, \"B-TENANT-ISO\", \"Ananya Sharma\", \"6E-203\", \"BLR \u2192 HYD\", OTHER_TENANT);"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/FailureModeTest.java",
+      "line": 105,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "assertTrue(result.getManualNextStep().contains(\"Ananya Sharma\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/PaymentSettlementTest.java",
+      "line": 97,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "successResult.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/PaymentSettlementTest.java",
+      "line": 143,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertEquals(\"R7X2K9\", completed.getNewPnr());"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppOtpSecurityTest.java",
+      "line": 66,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "successResult.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppOtpSecurityTest.java",
+      "line": 158,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertTrue(rebookReply.contains(\"R7X2K9\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppOtpSecurityTest.java",
+      "line": 162,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertEquals(\"R7X2K9\", rescued.getNewPnr());"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppOtpSecurityTest.java",
+      "line": 173,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "assertTrue(disruptReply.contains(\"Ananya Sharma\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppOtpSecurityTest.java",
+      "line": 198,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertTrue(finalRescueReply.contains(\"R7X2K9\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppOtpSecurityTest.java",
+      "line": 203,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertEquals(\"R7X2K9\", doneCase.getNewPnr());"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/OriginalPassengerWorkflowDefectsRegressionTest.java",
+      "line": 240,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "String pnr = \"R7X2K9\";"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/AviationRadarClientTest.java",
+      "line": 106,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": ".andExpect(jsonPath(\"$.triggeredCases[0].passengerName\", is(\"Ananya Sharma\")));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/FinancialAndBookingSafetyTest.java",
+      "line": 243,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "successResult.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/FinancialAndBookingSafetyTest.java",
+      "line": 251,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertEquals(\"R7X2K9\", doneCase.getNewPnr());"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/ApprovalGateTest.java",
+      "line": 60,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "mockResult.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/ApprovalGateTest.java",
+      "line": 116,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(jsonPath(\"$.newPnr\", is(\"R7X2K9\")))"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/ApprovalGateTest.java",
+      "line": 124,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": ".andExpect(jsonPath(\"$.newPnr\", is(\"R7X2K9\")));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage10BEndToEndRescueWorkflowTest.java",
+      "line": 88,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "\"R7X2K9\",                                // Authoritative GDS PNR"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage10BEndToEndRescueWorkflowTest.java",
+      "line": 92,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "\"Ananya Sharma\","
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage10BEndToEndRescueWorkflowTest.java",
+      "line": 107,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "\"Ananya Sharma\","
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage10BEndToEndRescueWorkflowTest.java",
+      "line": 147,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "assertEquals(\"Ananya Sharma\", rescueCase.getPassengerName());"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage10BEndToEndRescueWorkflowTest.java",
+      "line": 181,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertTrue(List.of(\"R1X9A2\", \"R7X2K9\").contains(rebookedCase.getNewPnr()), \"Authoritative GDS PNR mu"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppRealUserFlowsTest.java",
+      "line": 76,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "mockResult.setNewPnr(\"R7X2K9\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppRealUserFlowsTest.java",
+      "line": 104,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertTrue(settlementReply.contains(\"R7X2K9\"));"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppRealUserFlowsTest.java",
+      "line": 112,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "assertEquals(\"R7X2K9\", c.getNewPnr());"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppRealUserFlowsTest.java",
+      "line": 140,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "m.getText().contains(\"R7X2K9\") &&"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/CaseSimulationTest.java",
+      "line": 55,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": ".andExpect(jsonPath(\"$.passengerName\", is(\"Ananya Sharma\")))"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/FlightAlertTest.java",
+      "line": 70,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": ".andExpect(jsonPath(\"$.affectedCases[0].passengerName\", is(\"Ananya Sharma\")))"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/integration/amadeus/AmadeusGdsSandboxClientTest.java",
+      "line": 171,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "AmadeusFlightOrderResponse response = client.createFlightOrder(\"C1\", \"O1\", \"AI839\", \"Ananya Sharma\","
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/main/resources/static/mock-airline/confirm.html",
+      "line": 112,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "const passenger = params.get(\"passenger\") || \"Ananya Sharma\";"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/main/resources/static/mock-airline/confirm.html",
+      "line": 125,
+      "rule_id": "HARDCODED_PNR",
+      "severity": "MEDIUM",
+      "classification": "TEST_FIXTURE",
+      "description": "Fixed PNR string in business logic",
+      "matched_text": "let pnr = \"R7X2K9\";"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/config/FlyoDataSeeder.java",
+      "line": 42,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "SEED_DATA",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "\"Ananya Sharma\","
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/main/java/com/flyo/rescue/service/BookingService.java",
+      "line": 162,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "SEED_DATA",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "\"Ananya Sharma\","
+    }
+  ]
+}

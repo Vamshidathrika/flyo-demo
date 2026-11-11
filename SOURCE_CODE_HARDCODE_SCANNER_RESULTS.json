@@ -1,7 +1,7 @@
 {
-  "scanned_files": 307,
-  "prod_files": 246,
-  "test_files": 61,
+  "scanned_files": 324,
+  "prod_files": 260,
+  "test_files": 64,
   "findings": [
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/BookingApiTest.java",
@@ -23,7 +23,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppPassengerRescueWorkflowTest.java",
-      "line": 105,
+      "line": 114,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
@@ -32,7 +32,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppPassengerRescueWorkflowTest.java",
-      "line": 130,
+      "line": 139,
       "rule_id": "HARDCODED_PASSENGER_NAME",
       "severity": "HIGH",
       "classification": "TEST_FIXTURE",
@@ -41,7 +41,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppPassengerRescueWorkflowTest.java",
-      "line": 246,
+      "line": 258,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
@@ -50,7 +50,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppPassengerRescueWorkflowTest.java",
-      "line": 252,
+      "line": 264,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
@@ -247,6 +247,33 @@
       "matched_text": ".andExpect(content().string(containsString(\"R7X2K9\")));"
     },
     {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/P0ItineraryIntegrityRegressionTest.java",
+      "line": 211,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "b.setPassengerName(\"Ananya Sharma\");"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage14DistributedTransactionSafetyTest.java",
+      "line": 159,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "createBooking(\"B-TENANT-ISO\", \"Ananya Sharma\", \"PNR-TENANT\", \"BLR \u2192 HYD\", \"6E-203\", OTHER_TENANT);"
+    },
+    {
+      "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/Stage14DistributedTransactionSafetyTest.java",
+      "line": 160,
+      "rule_id": "HARDCODED_PASSENGER_NAME",
+      "severity": "HIGH",
+      "classification": "TEST_FIXTURE",
+      "description": "Passenger identity hardcoded in service code",
+      "matched_text": "createCase(caseId, \"B-TENANT-ISO\", \"Ananya Sharma\", \"6E-203\", \"BLR \u2192 HYD\", OTHER_TENANT);"
+    },
+    {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/FailureModeTest.java",
       "line": 105,
       "rule_id": "HARDCODED_PASSENGER_NAME",
@@ -257,7 +284,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/PaymentSettlementTest.java",
-      "line": 83,
+      "line": 97,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
@@ -266,7 +293,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/PaymentSettlementTest.java",
-      "line": 129,
+      "line": 143,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
@@ -329,7 +356,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/OriginalPassengerWorkflowDefectsRegressionTest.java",
-      "line": 226,
+      "line": 240,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
@@ -437,7 +464,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppRealUserFlowsTest.java",
-      "line": 68,
+      "line": 76,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
@@ -446,7 +473,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppRealUserFlowsTest.java",
-      "line": 96,
+      "line": 104,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
@@ -455,7 +482,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppRealUserFlowsTest.java",
-      "line": 104,
+      "line": 112,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
@@ -464,7 +491,7 @@
     },
     {
       "file": "flyo-rescue-demo/backend/src/test/java/com/flyo/rescue/WhatsAppRealUserFlowsTest.java",
-      "line": 132,
+      "line": 140,
       "rule_id": "HARDCODED_PNR",
       "severity": "MEDIUM",
       "classification": "TEST_FIXTURE",
